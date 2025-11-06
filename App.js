@@ -1,13 +1,21 @@
 // App.js
-import React from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Home from './components/Home';
 import HomeContent from './components/HomeContent';
 import MainBar from './components/MainBar';
+import AuthModal from './components/AuthModal';
 
 export default function App() {
+  const [authModalVisible, setAuthModalVisible] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  const handleAuthSuccess = (user) => {
+    setCurrentUser(user);
+  };
+
   return (
     <SafeAreaProvider>
       <View style={styles.container}>
@@ -21,8 +29,14 @@ export default function App() {
         <Home />
         <MainBar
           onPressPlus={() => console.log('➕ Nuevo item')}
-          onPressUser={() => console.log('👤 Usuario')}
+          onPressUser={() => setAuthModalVisible(true)}
           onPressSettings={() => console.log('⚙️ Configuración')}
+        />
+        
+        <AuthModal
+          visible={authModalVisible}
+          onClose={() => setAuthModalVisible(false)}
+          onAuthSuccess={handleAuthSuccess}
         />
       </View>
     </SafeAreaProvider>

@@ -21,7 +21,7 @@ export default function HomeContent() {
   
   // Estados
   const [proximoTurno, setProximoTurno] = useState(null);
-  const [deporteSeleccionado, setDeporteSeleccionado] = useState('futbol');
+  const [deporteSeleccionado, setDeporteSeleccionado] = useState('favoritas');
   const [canchas, setCanchas] = useState([]);
   const [topJugadores, setTopJugadores] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -74,10 +74,51 @@ export default function HomeContent() {
 
   const cargarCanchas = async () => {
     try {
-      const canchasData = await canchasService.getCanchasPorDeporte(deporteSeleccionado);
-      setCanchas(canchasData);
+      if (deporteSeleccionado === 'favoritas') {
+        // Cargar canchas favoritas (mock data por ahora)
+        setCanchas([]);
+      } else {
+        const canchasData = await canchasService.getCanchasPorDeporte(deporteSeleccionado);
+        setCanchas(canchasData);
+      }
     } catch (error) {
       console.error('Error cargando canchas:', error);
+      // Mock data para testing
+      const mockCanchas = [
+        {
+          id: 1,
+          nombre: `Cancha ${deporteSeleccionado} 1`,
+          precio_hora: 5000,
+          rating: 4.5,
+          fotos: [],
+          ubicacion: 'Centro'
+        },
+        {
+          id: 2,
+          nombre: `Cancha ${deporteSeleccionado} 2`,
+          precio_hora: 7500,
+          rating: 4.8,
+          fotos: [],
+          ubicacion: 'Norte'
+        },
+        {
+          id: 3,
+          nombre: `Cancha ${deporteSeleccionado} 3`,
+          precio_hora: 6000,
+          rating: 4.2,
+          fotos: [],
+          ubicacion: 'Sur'
+        },
+        {
+          id: 4,
+          nombre: `Cancha ${deporteSeleccionado} 4`,
+          precio_hora: 8000,
+          rating: 4.7,
+          fotos: [],
+          ubicacion: 'Oeste'
+        }
+      ];
+      setCanchas(mockCanchas);
     }
   };
 
@@ -184,76 +225,155 @@ export default function HomeContent() {
             <Ionicons name="trophy" size={48} color="rgba(255,255,255,0.9)" />
             <Text style={styles.sectionTitle}>Clasificación de Canchas</Text>
             
-            {/* Botones de deportes */}
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              style={styles.deportesScroll}
-              contentContainerStyle={styles.deportesContainer}
-            >
-              {deportes.map((deporte) => (
+            {/* Contenedor de selectores */}
+            <View style={styles.selectoresContainer}>
+              
+              {/* CANCHAS FAVORITAS - Botón fijo (sin scroll) */}
+              <View style={styles.favoritasContainer}>
                 <TouchableOpacity
-                  key={deporte}
                   style={[
                     styles.deporteButton,
-                    deporteSeleccionado === deporte && styles.deporteButtonActive,
+                    deporteSeleccionado === 'favoritas' && styles.deporteButtonActive,
                   ]}
-                  onPress={() => setDeporteSeleccionado(deporte)}
+                  onPress={() => setDeporteSeleccionado('favoritas')}
                 >
                   <Ionicons 
-                    name={deportesConfig[deporte].icon} 
+                    name="heart" 
                     size={20} 
-                    color={deporteSeleccionado === deporte ? '#fff' : 'rgba(255,255,255,0.7)'} 
+                    color={deporteSeleccionado === 'favoritas' ? '#fff' : 'rgba(255,255,255,0.7)'} 
                   />
                   <Text style={[
                     styles.deporteButtonText,
-                    deporteSeleccionado === deporte && styles.deporteButtonTextActive,
+                    deporteSeleccionado === 'favoritas' && styles.deporteButtonTextActive,
                   ]}>
-                    {deporte.charAt(0).toUpperCase() + deporte.slice(1)}
+                    Canchas Favoritas
                   </Text>
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
+              </View>
 
-            {/* Lista de canchas */}
-            <FlatList
-              data={canchas}
-              keyExtractor={(item) => item.id.toString()}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.canchasContainer}
-              numColumns={2}
-              key={`flatlist-${dimensions.width}`}
-              columnWrapperStyle={styles.canchasRow}
-              renderItem={({ item }) => (
-                <View style={[styles.canchaCard, { width: (dimensions.width - 52) / 2 }]}>
-                  <View style={styles.canchaImagePlaceholder}>
+              {/* BARRA SEPARADORA */}
+              <View style={styles.deportesSeparator} />
+
+              {/* DEPORTES - Con scroll horizontal */}
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                style={styles.deportesScroll}
+                contentContainerStyle={styles.deportesScrollContent}
+              >
+                {deportes.map((deporte) => (
+                  <TouchableOpacity
+                    key={deporte}
+                    style={[
+                      styles.deporteButton,
+                      deporteSeleccionado === deporte && styles.deporteButtonActive,
+                    ]}
+                    onPress={() => setDeporteSeleccionado(deporte)}
+                  >
                     <Ionicons 
-                      name={deportesConfig[deporteSeleccionado].icon} 
-                      size={60} 
-                      color={deportesConfig[deporteSeleccionado].color} 
+                      name={deportesConfig[deporte].icon} 
+                      size={20} 
+                      color={deporteSeleccionado === deporte ? '#fff' : 'rgba(255,255,255,0.7)'} 
                     />
-                  </View>
-                  <View style={styles.canchaInfo}>
-                    <Text style={styles.canchaNombre} numberOfLines={2}>
-                      {item.nombre}
+                    <Text style={[
+                      styles.deporteButtonText,
+                      deporteSeleccionado === deporte && styles.deporteButtonTextActive,
+                    ]}>
+                      {deporte.charAt(0).toUpperCase() + deporte.slice(1)}
                     </Text>
-                    <View style={styles.canchaRatingRow}>
-                      <Ionicons name="star" size={14} color="#fbbf24" />
-                      <Text style={styles.canchaRating}>{item.rating}</Text>
-                    </View>
-                    <Text style={styles.canchaUbicacion} numberOfLines={1}>
-                      <Ionicons name="location" size={12} color="#64748b" /> {item.ubicacion}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            {/* Lista de canchas con scroll vertical */}
+            <View style={styles.canchasListContainer}>
+              <FlatList
+                data={canchas}
+                keyExtractor={(item) => item.id.toString()}
+                showsVerticalScrollIndicator={true}
+                contentContainerStyle={styles.canchasContainer}
+                numColumns={2}
+                key={`flatlist-${dimensions.width}`}
+                columnWrapperStyle={styles.canchasRow}
+                nestedScrollEnabled={true}
+                style={styles.canchasList}
+                renderItem={({ item }) => {
+                  const cardWidth = (dimensions.width - 60) / 2; // Responsive width
+                  return (
+                    <TouchableOpacity 
+                      style={[styles.canchaCard, { width: cardWidth, height: cardWidth }]}
+                      activeOpacity={0.8}
+                    >
+                      <View style={styles.canchaImageContainer}>
+                        {item.fotos && item.fotos.length > 0 ? (
+                          <View style={styles.canchaImage}>
+                            {/* Placeholder para imagen real */}
+                            <Ionicons 
+                              name="image" 
+                              size={32} 
+                              color="rgba(255,255,255,0.6)" 
+                            />
+                          </View>
+                        ) : (
+                          <View style={styles.canchaImagePlaceholder}>
+                            <Ionicons 
+                              name={deporteSeleccionado === 'favoritas' ? 'heart' : deportesConfig[deporteSeleccionado]?.icon || 'football'} 
+                              size={32} 
+                              color={deporteSeleccionado === 'favoritas' ? '#ff6b9d' : deportesConfig[deporteSeleccionado]?.color || '#0000CD'} 
+                            />
+                          </View>
+                        )}
+                        
+                        {/* Botón de favorito */}
+                        <TouchableOpacity style={styles.favoriteBtn}>
+                          <Ionicons name="heart-outline" size={18} color="#fff" />
+                        </TouchableOpacity>
+
+                        {/* Precio overlay */}
+                        <View style={styles.priceOverlay}>
+                          <Text style={styles.priceText}>${item.precio_hora || 0}/h</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.canchaInfo}>
+                        <Text style={styles.canchaNombre} numberOfLines={1}>
+                          {item.nombre}
+                        </Text>
+                        <View style={styles.canchaMetaRow}>
+                          <View style={styles.canchaRatingRow}>
+                            <Ionicons name="star" size={12} color="#fbbf24" />
+                            <Text style={styles.canchaRating}>{(item.rating || 0).toFixed(1)}</Text>
+                          </View>
+                          <Text style={styles.canchaDistance}>2.1km</Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                }}
+                ListEmptyComponent={
+                  <View style={[styles.emptyContainer, { width: dimensions.width - 40 }]}>
+                    <Ionicons 
+                      name={deporteSeleccionado === 'favoritas' ? 'heart-outline' : 'search'} 
+                      size={48} 
+                      color="rgba(255,255,255,0.3)" 
+                    />
+                    <Text style={styles.emptyText}>
+                      {deporteSeleccionado === 'favoritas' 
+                        ? 'Sin canchas favoritas' 
+                        : 'No hay canchas disponibles'
+                      }
                     </Text>
-                    <Text style={styles.canchaPrecio}>${item.precio.toLocaleString()}/hora</Text>
+                    <Text style={styles.emptySubtext}>
+                      {deporteSeleccionado === 'favoritas'
+                        ? 'Toca el ❤️ en las canchas que más te gustan para guardarlas aquí'
+                        : 'Prueba con otro deporte o verifica tu conexión'
+                      }
+                    </Text>
                   </View>
-                </View>
-              )}
-              ListEmptyComponent={
-                <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyText}>No hay canchas disponibles</Text>
-                </View>
-              }
-            />
+                }
+              />
+            </View>
           </View>
         </View>
       </View>
@@ -502,106 +622,210 @@ const styles = StyleSheet.create({
   },
 
   // === SECCIÓN 2: CANCHAS ===
-  deportesScroll: {
+  selectoresContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 20,
-    maxHeight: 48,
+    paddingHorizontal: 20,
   },
-  deportesContainer: {
-    paddingHorizontal: 0,
-    gap: 8,
+  
+  // Favoritas - Botón fijo
+  favoritasContainer: {
+    marginRight: 16,
   },
+  
+  // Deportes - Con scroll
+  deportesScroll: {
+    flex: 1,
+    maxHeight: 50,
+  },
+  deportesScrollContent: {
+    alignItems: 'center',
+    paddingRight: 20, // Espacio extra al final
+  },
+  
+  // Estilo común para todos los botones
   deporteButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingVertical: 12,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-    marginRight: 8,
-    gap: 6,
+    borderColor: 'rgba(255,255,255,0.2)',
+    marginRight: 12,
+    gap: 8,
+    minWidth: 120, // Ancho mínimo para consistencia
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
+  
+  // Barra separadora
+  deportesSeparator: {
+    width: 2,
+    height: 32,
+    backgroundColor: 'rgba(255,255,255,0.4)',
+    borderRadius: 1,
+    marginRight: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  
+  // Estados activos
   deporteButtonActive: {
     backgroundColor: 'rgba(255,255,255,0.25)',
     borderColor: 'rgba(255,255,255,0.4)',
+    shadowColor: '#fff',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+    transform: [{ scale: 1.05 }],
   },
+  
+  // Texto de botones
   deporteButtonText: {
     fontSize: 14,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.7)',
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.8)',
     includeFontPadding: false,
+    textAlign: 'center',
   },
   deporteButtonTextActive: {
     color: '#fff',
-    fontWeight: '600',
+    fontWeight: '700',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  canchasListContainer: {
+    flex: 1,
+    marginTop: 16,
+  },
+  canchasList: {
+    flex: 1,
   },
   canchasContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
   },
   canchasRow: {
     justifyContent: 'space-between',
     marginBottom: 16,
   },
   canchaCard: {
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     borderRadius: 16,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 5,
+    elevation: 4,
   },
-  canchaImagePlaceholder: {
-    height: 140,
-    backgroundColor: '#f1f5f9',
+  canchaImageContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  canchaImage: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  canchaImagePlaceholder: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  favoriteBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  priceOverlay: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  priceText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#fff',
+    includeFontPadding: false,
+  },
   canchaInfo: {
     padding: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
   canchaNombre: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#1e293b',
-    marginBottom: 6,
+    color: '#fff',
+    marginBottom: 4,
     includeFontPadding: false,
-    minHeight: 36,
+  },
+  canchaMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   canchaRatingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
     gap: 4,
   },
   canchaRating: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#64748b',
+    color: 'rgba(255,255,255,0.8)',
     includeFontPadding: false,
   },
-  canchaUbicacion: {
+  canchaDistance: {
     fontSize: 11,
-    color: '#64748b',
-    marginBottom: 8,
-    includeFontPadding: false,
-  },
-  canchaPrecio: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0000CD',
+    color: 'rgba(255,255,255,0.6)',
     includeFontPadding: false,
   },
   emptyContainer: {
-    padding: 40,
+    paddingVertical: 60,
+    paddingHorizontal: 40,
     alignItems: 'center',
   },
   emptyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.8)',
+    textAlign: 'center',
+    marginTop: 16,
+    includeFontPadding: false,
+  },
+  emptySubtext: {
     fontSize: 14,
     color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 20,
   },
 
   // === SECCIÓN 3: GOATS ===

@@ -61,7 +61,10 @@ export default function MainBar({
             {/* Usuario (derecha) */}
             <TouchableOpacity
               style={styles.iconButton}
-              onPress={onPressUser}
+              onPress={() => {
+                console.log('👤 Botón usuario presionado');
+                onPressUser();
+              }}
               activeOpacity={0.6}
             >
               <Icon name="user" size={24} color="#1f2937" />
