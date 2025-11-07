@@ -112,32 +112,23 @@ class AuthService {
   // Registro de local/cancha
   async registerLocal(localData) {
     try {
-      const formData = new FormData();
-      
-      // Agregar campos de texto
-      Object.keys(localData).forEach(key => {
-        if (key !== 'fotos') {
-          formData.append(key, localData[key]);
-        }
-      });
-
-      // Agregar fotos
-      if (localData.fotos && localData.fotos.length > 0) {
-        localData.fotos.forEach((foto, index) => {
-          formData.append('fotos', {
-            uri: foto.uri,
-            type: foto.type || 'image/jpeg',
-            name: foto.name || `foto_${index}.jpg`,
-          });
-        });
-      }
-
+      // Enviar como JSON simple (fotos se suben después en Settings)
       const response = await fetch(`${API_BASE_URL}/auth/register/local`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'multipart/form-data',
+          'Content-Type': 'application/json',
         },
-        body: formData,
+        body: JSON.stringify({
+          email: localData.email,
+          password: localData.password,
+          nombre: localData.nombre,
+          direccion: localData.direccion,
+          latitud: localData.latitud,
+          longitud: localData.longitud,
+          descripcion: localData.descripcion || '',
+          deportes: localData.deportes || '[]',
+          precio_hora: localData.precio_hora || 0
+        }),
       });
 
       const data = await response.json();
@@ -200,6 +191,7 @@ class AuthService {
     } catch (error) {
       console.error('Error en logout:', error);
     } finally {
+      this.user = null; // Limpiar usuario en memoria
       await this.removeToken();
     }
   }

@@ -24,14 +24,10 @@ import authService from '../services/authService';
 
 export default function AuthModal({ visible, onClose, onAuthSuccess }) {
   const insets = useSafeAreaInsets();
-  const [step, setStep] = useState('selection'); // 'selection' | 'login' | 'usuario' | 'local'
-  const [userType, setUserType] = useState(null); // 'usuario' | 'local'
+  const [mode, setMode] = useState('login'); // 'login' | 'register'
+  const [userType, setUserType] = useState('usuario'); // 'usuario' | 'local' (solo para registro)
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
-  const [currentUser, setCurrentUser] = useState(null);
-
-  // Debug log
-  console.log('🔍 AuthModal visible:', visible, 'step:', step);
 
   // Campos del formulario
   const [formData, setFormData] = useState({
@@ -53,32 +49,14 @@ export default function AuthModal({ visible, onClose, onAuthSuccess }) {
   });
 
   useEffect(() => {
-    if (visible) {
-      checkCurrentUser();
-    }
-  }, [visible]);
-
-  useEffect(() => {
     if (!visible) {
       resetForm();
     }
   }, [visible]);
 
-  const checkCurrentUser = async () => {
-    try {
-      const user = await authService.getCurrentUser();
-      setCurrentUser(user);
-      if (user) {
-        setStep('profile');
-      }
-    } catch (error) {
-      console.error('Error checking user:', error);
-    }
-  };
-
   const resetForm = () => {
-    setStep('selection');
-    setUserType(null);
+    setMode('login');
+    setUserType('usuario');
     setMessage(null);
     setLoading(false);
     setFormData({

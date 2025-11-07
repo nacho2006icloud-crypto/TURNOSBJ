@@ -22,7 +22,12 @@ app.use('/uploads', express.static('uploads'));
 // Configuración de multer para manejo de archivos
 const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
-    const uploadDir = 'uploads/canchas';
+    // Determinar carpeta según el tipo de upload
+    let uploadDir = 'uploads/canchas';
+    if (file.fieldname === 'foto') {
+      uploadDir = 'uploads/profiles';
+    }
+    
     try {
       await fs.mkdir(uploadDir, { recursive: true });
       cb(null, uploadDir);
@@ -237,7 +242,8 @@ app.post('/api/auth/register/usuario', async (req, res) => {
 });
 
 // Registro de local/cancha
-app.post('/api/auth/register/local', upload.array('fotos', 5), async (req, res) => {
+// Registro de local/cancha (sin fotos en el registro inicial)
+app.post('/api/auth/register/local', async (req, res) => {
   try {
     const { email, password, nombre, direccion, latitud, longitud, descripcion, deportes, precio_hora } = req.body;
 
@@ -254,16 +260,13 @@ app.post('/api/auth/register/local', upload.array('fotos', 5), async (req, res) 
     // Hash de la contraseña
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Procesar fotos subidas
-    const fotos = req.files ? req.files.map(file => `/uploads/canchas/${file.filename}`) : [];
-
     // Insertar usuario
     const [userResult] = await db.execute(
       'INSERT INTO usuarios (nombre_completo, email, password, tipo_usuario) VALUES (?, ?, ?, ?)',
       [nombre, email, hashedPassword, 'local']
     );
 
-    // Insertar local/cancha
+    // Insertar local/cancha (fotos se agregan después en Settings)
     const [localResult] = await db.execute(
       'INSERT INTO locales (usuario_id, email, password, nombre, direccion, latitud, longitud, fotos, descripcion, deportes, precio_hora) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
@@ -274,7 +277,7 @@ app.post('/api/auth/register/local', upload.array('fotos', 5), async (req, res) 
         direccion,
         latitud || null,
         longitud || null,
-        JSON.stringify(fotos),
+        JSON.stringify([]),
         descripcion || '',
         deportes || '[]',
         precio_hora || 0
@@ -434,7 +437,7 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
 
 // RUTAS DE CANCHAS
 
-// Obtener canchas
+// Obtener canchas (solo visibles)
 app.get('/api/canchas', async (req, res) => {
   try {
     const { deporte, favoritas } = req.query;
@@ -443,7 +446,7 @@ app.get('/api/canchas', async (req, res) => {
       SELECT l.*, u.nombre_completo as propietario_nombre 
       FROM locales l 
       JOIN usuarios u ON l.usuario_id = u.id 
-      WHERE 1=1
+      WHERE l.visible = TRUE
     `;
     let params = [];
 
@@ -466,6 +469,369 @@ app.get('/api/canchas', async (req, res) => {
     res.json(canchasProcessed);
   } catch (error) {
     console.error('Error obteniendo canchas:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// RUTAS DE GESTIÓN DE USUARIOS
+
+// Subir/actualizar foto de perfil
+app.post('/api/usuario/foto-perfil', authenticateToken, upload.single('foto'), async (req, res) => {
+  try {
+    if (req.user.tipo_usuario !== 'usuario') {
+      return res.status(403).json({ error: 'Solo usuarios pueden actualizar foto de perfil' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No se recibió ninguna foto' });
+    }
+
+    const fotoUrl = `/uploads/profiles/${req.file.filename}`;
+    
+    await db.execute('UPDATE usuarios SET foto_perfil = ? WHERE id = ?', [fotoUrl, req.user.id]);
+
+    res.json({ message: 'Foto actualizada exitosamente', foto_perfil: fotoUrl });
+  } catch (error) {
+    console.error('Error actualizando foto de perfil:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// Obtener estadísticas del usuario
+app.get('/api/usuario/stats', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.tipo_usuario !== 'usuario') {
+      return res.status(403).json({ error: 'Solo usuarios pueden ver estadísticas' });
+    }
+
+    const userId = req.user.id;
+    const hoy = new Date().toISOString().split('T')[0];
+
+    // Próximos turnos
+    const [proximos] = await db.execute(
+      'SELECT COUNT(*) as count FROM reservas WHERE usuario_id = ? AND fecha >= ? AND estado != "cancelada"',
+      [userId, hoy]
+    );
+
+    // Turnos disputados (completados)
+    const [disputados] = await db.execute(
+      'SELECT COUNT(*) as count FROM reservas WHERE usuario_id = ? AND estado = "completada"',
+      [userId]
+    );
+
+    // Turnos cancelados
+    const [cancelados] = await db.execute(
+      'SELECT COUNT(*) as count FROM reservas WHERE usuario_id = ? AND estado = "cancelada"',
+      [userId]
+    );
+
+    res.json({
+      proximos: proximos[0]?.count || 0,
+      disputados: disputados[0]?.count || 0,
+      cancelados: cancelados[0]?.count || 0,
+    });
+  } catch (error) {
+    console.error('Error obteniendo estadísticas:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// RUTAS DE GESTIÓN DE LOCALES (para settings)
+
+// Actualizar información del local
+app.put('/api/local/info', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.tipo_usuario !== 'local') {
+      return res.status(403).json({ error: 'Solo locales pueden actualizar información' });
+    }
+
+    const { nombre, direccion, descripcion, deportes, precio_hora } = req.body;
+    const localId = req.user.local_id;
+
+    if (!localId) {
+      return res.status(404).json({ error: 'Local no encontrado' });
+    }
+
+    await db.execute(
+      'UPDATE locales SET nombre = ?, direccion = ?, descripcion = ?, deportes = ?, precio_hora = ? WHERE id = ?',
+      [nombre, direccion, descripcion || '', deportes || '[]', precio_hora || 0, localId]
+    );
+
+    res.json({ message: 'Información actualizada exitosamente' });
+  } catch (error) {
+    console.error('Error actualizando información:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// Subir fotos al local
+app.post('/api/local/fotos', authenticateToken, upload.array('fotos', 5), async (req, res) => {
+  try {
+    if (req.user.tipo_usuario !== 'local') {
+      return res.status(403).json({ error: 'Solo locales pueden subir fotos' });
+    }
+
+    const localId = req.user.local_id;
+
+    if (!localId) {
+      return res.status(404).json({ error: 'Local no encontrado' });
+    }
+
+    // Obtener fotos actuales
+    const [locales] = await db.execute('SELECT fotos FROM locales WHERE id = ?', [localId]);
+    const fotosActuales = JSON.parse(locales[0]?.fotos || '[]');
+
+    // Agregar nuevas fotos
+    const nuevasFotos = req.files ? req.files.map(file => `/uploads/canchas/${file.filename}`) : [];
+    const todasFotos = [...fotosActuales, ...nuevasFotos];
+
+    await db.execute('UPDATE locales SET fotos = ? WHERE id = ?', [JSON.stringify(todasFotos), localId]);
+
+    res.json({ message: 'Fotos subidas exitosamente', fotos: todasFotos });
+  } catch (error) {
+    console.error('Error subiendo fotos:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// Eliminar foto del local
+app.delete('/api/local/fotos', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.tipo_usuario !== 'local') {
+      return res.status(403).json({ error: 'Solo locales pueden eliminar fotos' });
+    }
+
+    const { foto } = req.body;
+    const localId = req.user.local_id;
+
+    if (!localId) {
+      return res.status(404).json({ error: 'Local no encontrado' });
+    }
+
+    // Obtener fotos actuales
+    const [locales] = await db.execute('SELECT fotos FROM locales WHERE id = ?', [localId]);
+    const fotosActuales = JSON.parse(locales[0]?.fotos || '[]');
+
+    // Filtrar la foto a eliminar
+    const fotosFiltradas = fotosActuales.filter(f => f !== foto);
+
+    await db.execute('UPDATE locales SET fotos = ? WHERE id = ?', [JSON.stringify(fotosFiltradas), localId]);
+
+    // Intentar eliminar el archivo físico
+    try {
+      const filePath = path.join(__dirname, '..', foto);
+      await fs.unlink(filePath);
+    } catch (err) {
+      console.log('Archivo no encontrado o ya eliminado:', foto);
+    }
+
+    res.json({ message: 'Foto eliminada exitosamente', fotos: fotosFiltradas });
+  } catch (error) {
+    console.error('Error eliminando foto:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// Obtener horarios del local
+app.get('/api/local/horarios', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.tipo_usuario !== 'local') {
+      return res.status(403).json({ error: 'Solo locales pueden ver horarios' });
+    }
+
+    const localId = req.user.local_id;
+
+    if (!localId) {
+      return res.status(404).json({ error: 'Local no encontrado' });
+    }
+
+    const [horarios] = await db.execute(
+      'SELECT * FROM horarios_disponibles WHERE local_id = ? ORDER BY FIELD(dia, "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"), hora_inicio',
+      [localId]
+    );
+
+    res.json(horarios);
+  } catch (error) {
+    console.error('Error obteniendo horarios:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// Crear nuevo horario
+app.post('/api/local/horarios', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.tipo_usuario !== 'local') {
+      return res.status(403).json({ error: 'Solo locales pueden crear horarios' });
+    }
+
+    const { dia, hora_inicio, hora_fin, max_integrantes, deporte } = req.body;
+    const localId = req.user.local_id;
+
+    if (!localId) {
+      return res.status(404).json({ error: 'Local no encontrado' });
+    }
+
+    if (!dia || !hora_inicio || !hora_fin) {
+      return res.status(400).json({ error: 'Día, hora de inicio y hora de fin son requeridos' });
+    }
+
+    // Validar formato de hora (HH:MM)
+    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    if (!timeRegex.test(hora_inicio) || !timeRegex.test(hora_fin)) {
+      return res.status(400).json({ error: 'Formato de hora inválido. Use HH:MM' });
+    }
+
+    // Validar que hora_fin sea mayor que hora_inicio
+    if (hora_inicio >= hora_fin) {
+      return res.status(400).json({ error: 'La hora de fin debe ser mayor a la hora de inicio' });
+    }
+
+    const [result] = await db.execute(
+      'INSERT INTO horarios_disponibles (local_id, dia, hora_inicio, hora_fin, max_integrantes, deporte, disponible) VALUES (?, ?, ?, ?, ?, ?, TRUE)',
+      [localId, dia, hora_inicio, hora_fin, max_integrantes ? parseInt(max_integrantes) : null, deporte || 'Futbol 5']
+    );
+
+    res.status(201).json({ 
+      message: 'Horario creado exitosamente',
+      horario: {
+        id: result.insertId,
+        local_id: localId,
+        dia,
+        hora_inicio,
+        hora_fin,
+        max_integrantes: max_integrantes ? parseInt(max_integrantes) : null,
+        deporte: deporte || 'Futbol 5',
+        disponible: true
+      }
+    });
+  } catch (error) {
+    console.error('Error creando horario:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// Toggle disponibilidad de horario
+app.put('/api/local/horarios/:id/toggle', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.tipo_usuario !== 'local') {
+      return res.status(403).json({ error: 'Solo locales pueden modificar horarios' });
+    }
+
+    const horarioId = req.params.id;
+    const localId = req.user.local_id;
+
+    if (!localId) {
+      return res.status(404).json({ error: 'Local no encontrado' });
+    }
+
+    // Verificar que el horario pertenece al local
+    const [horarios] = await db.execute(
+      'SELECT * FROM horarios_disponibles WHERE id = ? AND local_id = ?',
+      [horarioId, localId]
+    );
+
+    if (horarios.length === 0) {
+      return res.status(404).json({ error: 'Horario no encontrado' });
+    }
+
+    const nuevoEstado = !horarios[0].disponible;
+
+    await db.execute(
+      'UPDATE horarios_disponibles SET disponible = ? WHERE id = ?',
+      [nuevoEstado, horarioId]
+    );
+
+    res.json({ message: 'Estado actualizado exitosamente', disponible: nuevoEstado });
+  } catch (error) {
+    console.error('Error actualizando horario:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// Eliminar horario
+app.delete('/api/local/horarios/:id', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.tipo_usuario !== 'local') {
+      return res.status(403).json({ error: 'Solo locales pueden eliminar horarios' });
+    }
+
+    const horarioId = req.params.id;
+    const localId = req.user.local_id;
+
+    if (!localId) {
+      return res.status(404).json({ error: 'Local no encontrado' });
+    }
+
+    // Verificar que el horario pertenece al local
+    const [horarios] = await db.execute(
+      'SELECT * FROM horarios_disponibles WHERE id = ? AND local_id = ?',
+      [horarioId, localId]
+    );
+
+    if (horarios.length === 0) {
+      return res.status(404).json({ error: 'Horario no encontrado' });
+    }
+
+    await db.execute('DELETE FROM horarios_disponibles WHERE id = ?', [horarioId]);
+
+    res.json({ message: 'Horario eliminado exitosamente' });
+  } catch (error) {
+    console.error('Error eliminando horario:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// Obtener reservas del local
+app.get('/api/local/reservas', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.tipo_usuario !== 'local') {
+      return res.status(403).json({ error: 'Solo locales pueden ver reservas' });
+    }
+
+    const localId = req.user.local_id;
+
+    if (!localId) {
+      return res.status(404).json({ error: 'Local no encontrado' });
+    }
+
+    const [reservas] = await db.execute(`
+      SELECT r.*, h.dia, h.hora_inicio, h.hora_fin, u.nombre_completo as usuario_nombre
+      FROM reservas r
+      JOIN horarios_disponibles h ON r.horario_id = h.id
+      JOIN usuarios u ON r.usuario_id = u.id
+      WHERE h.local_id = ?
+      ORDER BY r.fecha_reserva DESC, h.dia, h.hora_inicio
+    `, [localId]);
+
+    res.json(reservas);
+  } catch (error) {
+    console.error('Error obteniendo reservas:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// Toggle visibilidad del local
+app.put('/api/local/visibilidad', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.tipo_usuario !== 'local') {
+      return res.status(403).json({ error: 'Solo locales pueden modificar visibilidad' });
+    }
+
+    const { visible } = req.body;
+    const localId = req.user.local_id;
+
+    if (!localId) {
+      return res.status(404).json({ error: 'Local no encontrado' });
+    }
+
+    await db.execute('UPDATE locales SET visible = ? WHERE id = ?', [visible ? 1 : 0, localId]);
+
+    res.json({ 
+      message: visible ? 'Cancha visible para usuarios' : 'Cancha oculta de usuarios',
+      visible 
+    });
+  } catch (error) {
+    console.error('Error actualizando visibilidad:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
