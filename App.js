@@ -10,12 +10,14 @@ import AuthModalNew from './components/AuthModalNew';
 import SettingsModal from './components/SettingsModal';
 import LocalDashboard from './components/LocalDashboard';
 import UserProfileModal from './components/UserProfileModal';
+import LocalProfileModal from './components/LocalProfileModal';
 import authService from './services/authService';
 
 export default function App() {
   const [authModalVisible, setAuthModalVisible] = useState(false);
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
   const [profileModalVisible, setProfileModalVisible] = useState(false);
+  const [localProfileModalVisible, setLocalProfileModalVisible] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -23,9 +25,9 @@ export default function App() {
     checkAuth();
   }, []);
 
-  const checkAuth = async () => {
+  const checkAuth = async (forceRefresh = false) => {
     try {
-      const user = await authService.getCurrentUser();
+      const user = await authService.getCurrentUser(forceRefresh);
       setCurrentUser(user);
     } catch (error) {
       console.log('No hay sesión activa');
@@ -34,22 +36,21 @@ export default function App() {
     }
   };
 
+  const refreshCurrentUser = async () => {
+    await checkAuth(true);
+  };
+
   const handleAuthSuccess = (user) => {
     setCurrentUser(user);
   };
 
   const handleUserPress = () => {
-    console.log('🟡 APP.JS - handleUserPress - currentUser:', currentUser?.nombre_completo || 'NULL');
     if (!currentUser) {
-      console.log('🟡 APP.JS - No hay usuario, abriendo AuthModal');
       setAuthModalVisible(true);
     } else if (currentUser.tipo_usuario === 'usuario') {
-      console.log('🟡 APP.JS - Usuario normal, abriendo ProfileModal');
       setProfileModalVisible(true);
     } else {
-      console.log('🟡 APP.JS - Usuario local, ejecutando logout directo');
-      // Para locales, cerrar sesión directamente
-      handleLogout();
+      setLocalProfileModalVisible(true);
     }
   };
 
@@ -73,21 +74,25 @@ export default function App() {
   };
 
   const handleProfileUpdate = (user) => {
-    console.log('🟢 APP.JS - handleProfileUpdate llamado con:', user);
-    
-    // Cerrar modal SIEMPRE
     setProfileModalVisible(false);
     
     if (user === null) {
-      // Logout desde UserProfileModal
-      console.log('🟢 APP.JS - Detectado logout, limpiando estado...');
       setCurrentUser(null);
       setAuthModalVisible(false);
       setSettingsModalVisible(false);
-      console.log('🟢 APP.JS - Estado limpiado, currentUser ahora es null');
     } else {
-      // Actualizar usuario (refrescar datos)
-      console.log('🟢 APP.JS - Actualizando datos de usuario...');
+      checkAuth();
+    }
+  };
+
+  const handleLocalProfileUpdate = (user) => {
+    setLocalProfileModalVisible(false);
+    
+    if (user === null) {
+      setCurrentUser(null);
+      setAuthModalVisible(false);
+      setSettingsModalVisible(false);
+    } else {
       checkAuth();
     }
   };
@@ -135,10 +140,18 @@ export default function App() {
           onUpdate={handleProfileUpdate}
         />
 
+        <LocalProfileModal
+          visible={localProfileModalVisible}
+          onClose={() => setLocalProfileModalVisible(false)}
+          currentUser={currentUser}
+          onUpdate={handleLocalProfileUpdate}
+        />
+
         <SettingsModal
           visible={settingsModalVisible}
           onClose={() => setSettingsModalVisible(false)}
           currentUser={currentUser}
+          onUpdate={refreshCurrentUser}
         />
       </View>
     </SafeAreaProvider>

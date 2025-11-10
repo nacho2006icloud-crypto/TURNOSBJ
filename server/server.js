@@ -124,6 +124,7 @@ async function createTables() {
           precio_hora DECIMAL(10, 2),
           rating DECIMAL(3, 2) DEFAULT 0,
           total_reviews INT DEFAULT 0,
+          visible BOOLEAN DEFAULT FALSE,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
@@ -143,10 +144,81 @@ async function createTables() {
         )
       `);
 
+      // Tabla de horarios disponibles
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS horarios_disponibles (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          local_id INT NOT NULL,
+          dia VARCHAR(20) NOT NULL,
+          hora_inicio TIME NOT NULL,
+          hora_fin TIME NOT NULL,
+          max_integrantes INT,
+          deporte VARCHAR(50) DEFAULT 'Futbol 5',
+          disponible BOOLEAN DEFAULT TRUE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          FOREIGN KEY (local_id) REFERENCES locales(id) ON DELETE CASCADE
+        )
+      `);
+
+      // Tabla de reservas
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS reservas (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          usuario_id INT NOT NULL,
+          local_id INT NOT NULL,
+          horario_id INT,
+          fecha DATE NOT NULL,
+          fecha_reserva DATETIME DEFAULT CURRENT_TIMESTAMP,
+          hora_inicio TIME NOT NULL,
+          hora_fin TIME NOT NULL,
+          deporte VARCHAR(50) NOT NULL,
+          equipo CHAR(1),
+          precio DECIMAL(10, 2) NOT NULL,
+          estado ENUM('pendiente', 'confirmada', 'cancelada', 'completada') DEFAULT 'pendiente',
+          notas TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+          FOREIGN KEY (local_id) REFERENCES locales(id) ON DELETE CASCADE,
+          FOREIGN KEY (horario_id) REFERENCES horarios_disponibles(id) ON DELETE CASCADE
+        )
+      `);
+
       console.log('✅ Tablas creadas/verificadas');
+      
+      // Migración: Agregar columna 'visible' si no existe
+      await addVisibleColumnIfNotExists();
     }
   } catch (error) {
     console.error('❌ Error creando tablas:', error);
+  }
+}
+
+// Migración: Agregar columna 'visible' a tabla locales si no existe
+async function addVisibleColumnIfNotExists() {
+  try {
+    if (db.constructor.name === 'Connection') {
+      // Verificar si la columna ya existe
+      const [columns] = await db.execute(`
+        SELECT COLUMN_NAME 
+        FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'locales' AND COLUMN_NAME = 'visible'
+      `, [dbConfig.database]);
+
+      if (columns.length === 0) {
+        // La columna no existe, agregarla
+        await db.execute(`
+          ALTER TABLE locales 
+          ADD COLUMN visible BOOLEAN DEFAULT FALSE
+        `);
+        console.log('✅ Columna "visible" agregada a tabla locales');
+      } else {
+        console.log('✅ Columna "visible" ya existe');
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error en migración de columna visible:', error);
   }
 }
 
@@ -178,6 +250,17 @@ const authenticateToken = async (req, res, next) => {
   } catch (error) {
     return res.status(403).json({ error: 'Token inválido' });
   }
+};
+
+// Helper: Obtener local_id de forma segura (del token o de la BD)
+const getLocalId = async (req) => {
+  if (req.user.local_id) {
+    return req.user.local_id;
+  }
+  
+  // Si no está en el token, buscarlo en la base de datos
+  const [locales] = await db.execute('SELECT id FROM locales WHERE usuario_id = ?', [req.user.id]);
+  return locales.length > 0 ? locales[0].id : null;
 };
 
 // RUTAS DE AUTENTICACIÓN
@@ -417,7 +500,32 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
     let localData = null;
     if (user.tipo_usuario === 'local') {
       const [locales] = await db.execute('SELECT * FROM locales WHERE usuario_id = ?', [user.id]);
-      localData = locales[0] || null;
+      if (locales.length > 0) {
+        // Parsear JSON de manera segura
+        const parseFotos = () => {
+          try {
+            if (!locales[0].fotos || locales[0].fotos === '') return [];
+            return JSON.parse(locales[0].fotos);
+          } catch (e) {
+            return [];
+          }
+        };
+        
+        const parseDeportes = () => {
+          try {
+            if (!locales[0].deportes || locales[0].deportes === '') return [];
+            return JSON.parse(locales[0].deportes);
+          } catch (e) {
+            return [];
+          }
+        };
+        
+        localData = {
+          ...locales[0],
+          fotos: parseFotos(),
+          deportes: parseDeportes()
+        };
+      }
     }
 
     res.json({
@@ -459,12 +567,32 @@ app.get('/api/canchas', async (req, res) => {
 
     const [canchas] = await db.execute(query, params);
     
-    // Procesar fotos JSON
-    const canchasProcessed = canchas.map(cancha => ({
-      ...cancha,
-      fotos: JSON.parse(cancha.fotos || '[]'),
-      deportes: JSON.parse(cancha.deportes || '[]')
-    }));
+    // Procesar fotos y deportes JSON de manera segura
+    const canchasProcessed = canchas.map(cancha => {
+      const parseFotos = () => {
+        try {
+          if (!cancha.fotos || cancha.fotos === '') return [];
+          return JSON.parse(cancha.fotos);
+        } catch (e) {
+          return [];
+        }
+      };
+      
+      const parseDeportes = () => {
+        try {
+          if (!cancha.deportes || cancha.deportes === '') return [];
+          return JSON.parse(cancha.deportes);
+        } catch (e) {
+          return [];
+        }
+      };
+      
+      return {
+        ...cancha,
+        fotos: parseFotos(),
+        deportes: parseDeportes()
+      };
+    });
 
     res.json(canchasProcessed);
   } catch (error) {
@@ -546,21 +674,52 @@ app.put('/api/local/info', authenticateToken, async (req, res) => {
     }
 
     const { nombre, direccion, descripcion, deportes, precio_hora } = req.body;
-    const localId = req.user.local_id;
+    const localId = await getLocalId(req);
 
     if (!localId) {
       return res.status(404).json({ error: 'Local no encontrado' });
     }
 
+    // Validar campos obligatorios
+    if (!nombre || nombre.trim() === '') {
+      return res.status(400).json({ error: 'El nombre de la cancha es obligatorio' });
+    }
+    if (!direccion || direccion.trim() === '') {
+      return res.status(400).json({ error: 'La dirección es obligatoria' });
+    }
+    if (!precio_hora || parseFloat(precio_hora) <= 0) {
+      return res.status(400).json({ error: 'El precio debe ser mayor a 0' });
+    }
+
+    // Parsear y validar deportes
+    let deportesArray = [];
+    try {
+      if (typeof deportes === 'string') {
+        deportesArray = JSON.parse(deportes);
+      } else if (Array.isArray(deportes)) {
+        deportesArray = deportes;
+      }
+    } catch (e) {
+      return res.status(400).json({ error: 'Formato de deportes inválido' });
+    }
+
+    // Validar que al menos haya un deporte
+    if (!Array.isArray(deportesArray) || deportesArray.length === 0) {
+      return res.status(400).json({ error: 'Debes seleccionar al menos un deporte' });
+    }
+
+    // Convertir a JSON para guardar
+    const deportesJson = JSON.stringify(deportesArray);
+
     await db.execute(
       'UPDATE locales SET nombre = ?, direccion = ?, descripcion = ?, deportes = ?, precio_hora = ? WHERE id = ?',
-      [nombre, direccion, descripcion || '', deportes || '[]', precio_hora || 0, localId]
+      [nombre.trim(), direccion.trim(), descripcion || '', deportesJson, parseFloat(precio_hora), localId]
     );
 
-    res.json({ message: 'Información actualizada exitosamente' });
+    res.json({ message: 'Información actualizada exitosamente', deportes: deportesArray });
   } catch (error) {
     console.error('Error actualizando información:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    res.status(500).json({ error: 'Error interno del servidor', details: error.message });
   }
 });
 
@@ -571,10 +730,16 @@ app.post('/api/local/fotos', authenticateToken, upload.array('fotos', 5), async 
       return res.status(403).json({ error: 'Solo locales pueden subir fotos' });
     }
 
-    const localId = req.user.local_id;
-
+    // Obtener local_id del token o buscarlo en la base de datos
+    let localId = req.user.local_id;
+    
     if (!localId) {
-      return res.status(404).json({ error: 'Local no encontrado' });
+      // Si no está en el token, buscarlo en la base de datos
+      const [locales] = await db.execute('SELECT id FROM locales WHERE usuario_id = ?', [req.user.id]);
+      if (locales.length === 0) {
+        return res.status(404).json({ error: 'Local no encontrado' });
+      }
+      localId = locales[0].id;
     }
 
     // Obtener fotos actuales
@@ -602,7 +767,7 @@ app.delete('/api/local/fotos', authenticateToken, async (req, res) => {
     }
 
     const { foto } = req.body;
-    const localId = req.user.local_id;
+    const localId = await getLocalId(req);
 
     if (!localId) {
       return res.status(404).json({ error: 'Local no encontrado' });
@@ -639,7 +804,7 @@ app.get('/api/local/horarios', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Solo locales pueden ver horarios' });
     }
 
-    const localId = req.user.local_id;
+    const localId = await getLocalId(req);
 
     if (!localId) {
       return res.status(404).json({ error: 'Local no encontrado' });
@@ -665,7 +830,10 @@ app.post('/api/local/horarios', authenticateToken, async (req, res) => {
     }
 
     const { dia, hora_inicio, hora_fin, max_integrantes, deporte } = req.body;
-    const localId = req.user.local_id;
+    console.log('📅 Crear horario - Body recibido:', req.body);
+    
+    const localId = await getLocalId(req);
+    console.log('🏢 Local ID:', localId);
 
     if (!localId) {
       return res.status(404).json({ error: 'Local no encontrado' });
@@ -686,10 +854,14 @@ app.post('/api/local/horarios', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'La hora de fin debe ser mayor a la hora de inicio' });
     }
 
+    console.log('✅ Insertando horario:', { localId, dia, hora_inicio, hora_fin, max_integrantes, deporte });
+    
     const [result] = await db.execute(
       'INSERT INTO horarios_disponibles (local_id, dia, hora_inicio, hora_fin, max_integrantes, deporte, disponible) VALUES (?, ?, ?, ?, ?, ?, TRUE)',
       [localId, dia, hora_inicio, hora_fin, max_integrantes ? parseInt(max_integrantes) : null, deporte || 'Futbol 5']
     );
+
+    console.log('✅ Horario creado con ID:', result.insertId);
 
     res.status(201).json({ 
       message: 'Horario creado exitosamente',
@@ -710,15 +882,15 @@ app.post('/api/local/horarios', authenticateToken, async (req, res) => {
   }
 });
 
-// Toggle disponibilidad de horario
-app.put('/api/local/horarios/:id/toggle', authenticateToken, async (req, res) => {
+// Actualizar disponibilidad de horario (toggle)
+app.put('/api/local/horarios/:id/disponibilidad', authenticateToken, async (req, res) => {
   try {
     if (req.user.tipo_usuario !== 'local') {
-      return res.status(403).json({ error: 'Solo locales pueden modificar horarios' });
+      return res.status(403).json({ error: 'Solo locales pueden actualizar horarios' });
     }
 
     const horarioId = req.params.id;
-    const localId = req.user.local_id;
+    const localId = await getLocalId(req);
 
     if (!localId) {
       return res.status(404).json({ error: 'Local no encontrado' });
@@ -756,7 +928,7 @@ app.delete('/api/local/horarios/:id', authenticateToken, async (req, res) => {
     }
 
     const horarioId = req.params.id;
-    const localId = req.user.local_id;
+    const localId = await getLocalId(req);
 
     if (!localId) {
       return res.status(404).json({ error: 'Local no encontrado' });
@@ -788,7 +960,7 @@ app.get('/api/local/reservas', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Solo locales pueden ver reservas' });
     }
 
-    const localId = req.user.local_id;
+    const localId = await getLocalId(req);
 
     if (!localId) {
       return res.status(404).json({ error: 'Local no encontrado' });
@@ -818,12 +990,22 @@ app.put('/api/local/visibilidad', authenticateToken, async (req, res) => {
     }
 
     const { visible } = req.body;
-    const localId = req.user.local_id;
-
+    
+    console.log('🔄 Actualizando visibilidad para usuario:', req.user.id, 'a:', visible);
+    
+    // Obtener local_id del token o buscarlo en la base de datos
+    let localId = req.user.local_id;
+    
     if (!localId) {
-      return res.status(404).json({ error: 'Local no encontrado' });
+      const [locales] = await db.execute('SELECT id FROM locales WHERE usuario_id = ?', [req.user.id]);
+      if (locales.length === 0) {
+        return res.status(404).json({ error: 'Local no encontrado' });
+      }
+      localId = locales[0].id;
     }
 
+    console.log('✅ Local ID:', localId, 'Nuevo estado visible:', visible ? 1 : 0);
+    
     await db.execute('UPDATE locales SET visible = ? WHERE id = ?', [visible ? 1 : 0, localId]);
 
     res.json({ 

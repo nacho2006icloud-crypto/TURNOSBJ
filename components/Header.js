@@ -11,7 +11,7 @@ import {
   Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from '@expo/vector-icons' in 'expo-linear-gradient';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export const HEADER_CONTENT_HEIGHT = 80;
 

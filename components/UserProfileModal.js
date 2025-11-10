@@ -7,7 +7,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const API_URL = 'http://localhost:3000/api';
 
 export default function UserProfileModal({ visible, onClose, currentUser, onUpdate }) {
-  console.log('🟣 UserProfileModal renderizado - visible:', visible, 'currentUser:', currentUser?.nombre_completo);
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState({ proximos: 0, disputados: 0, cancelados: 0 });
   const [fotoPerfil, setFotoPerfil] = useState(currentUser?.foto_perfil || null);
@@ -94,74 +93,79 @@ export default function UserProfileModal({ visible, onClose, currentUser, onUpda
     }
   };
 
-  const handleLogout = () => {
-    console.log('🔵 HANDLELOGOUT - Botón presionado');
-    Alert.alert(
-      'Cerrar Sesión',
-      '¿Estás seguro que deseas salir?',
-      [
-        { 
-          text: 'Cancelar', 
-          style: 'cancel',
-          onPress: () => console.log('🔵 Usuario canceló logout')
-        },
-        {
-          text: 'Salir',
-          style: 'destructive',
-          onPress: () => {
-            console.log('🔵 Usuario confirmó logout');
-            performLogout();
+  const handleLogout = async () => {
+    console.log('🔵 HANDLELOGOUT ejecutándose...');
+    
+    // Para web, usar confirm nativo
+    if (Platform.OS === 'web') {
+      const confirmLogout = window.confirm('¿Estás seguro que deseas cerrar sesión?');
+      if (!confirmLogout) {
+        console.log('🔵 Usuario canceló logout');
+        return;
+      }
+    } else {
+      // Para mobile, usar Alert
+      Alert.alert(
+        'Cerrar Sesión',
+        '¿Estás seguro que deseas salir?',
+        [
+          { 
+            text: 'Cancelar', 
+            style: 'cancel',
+            onPress: () => console.log('🔵 Usuario canceló logout')
+          },
+          {
+            text: 'Salir',
+            style: 'destructive',
+            onPress: () => performLogout()
           }
-        }
-      ]
-    );
+        ]
+      );
+      return; // Salir aquí para mobile
+    }
+    
+    // Para web, continuar directamente
+    performLogout();
   };
 
   const performLogout = async () => {
-    console.log('🔴 PERFORMLOGOUT - Iniciando cierre de sesión...');
-    
-    // Cerrar modal PRIMERO
-    onClose();
+    console.log('🔵 PERFORMLOGOUT - Ejecutando cierre de sesión...');
     
     try {
-      const token = await getToken();
-      console.log('🔴 Token obtenido:', token ? 'Existe' : 'No existe');
-      
-      // Llamar al backend para logout
-      if (token) {
-        fetch(`${API_URL}/auth/logout`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` }
-        }).catch(err => console.log('Error en logout backend:', err));
-      }
-
-      // Limpiar token del storage
-      console.log('🔴 Limpiando token del storage...');
+      // 1. Limpiar token INMEDIATAMENTE
       if (Platform.OS === 'web') {
         localStorage.removeItem('auth_token');
       } else {
         await AsyncStorage.removeItem('auth_token');
       }
+      console.log('🔵 Token eliminado del storage');
       
-      console.log('🔴 Notificando al padre (onUpdate) con NULL...');
+      // 2. Cerrar modal INMEDIATAMENTE
+      console.log('🔵 Cerrando modal...');
+      onClose();
+      
+      // 3. Notificar al padre para limpiar currentUser
+      console.log('🔵 Llamando onUpdate(null)...');
       if (onUpdate) {
         onUpdate(null);
       }
       
-      console.log('🔴 Logout completado exitosamente');
-    } catch (error) {
-      console.error('🔴 Error en logout:', error);
-      // Aún así limpiar y notificar
+      // 4. Llamar al backend (en background, no bloqueante)
       try {
-        if (Platform.OS === 'web') {
-          localStorage.removeItem('auth_token');
-        } else {
-          await AsyncStorage.removeItem('auth_token');
+        const token = await getToken();
+        if (token) {
+          fetch(`${API_URL}/auth/logout`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
         }
       } catch (e) {
-        console.log('Error limpiando storage:', e);
+        console.log('Error en backend logout:', e);
       }
-      if (onUpdate) onUpdate(null);
+      
+      console.log('🔵 Logout completado exitosamente');
+    } catch (error) {
+      console.error('🔵 Error en logout:', error);
     }
   };
 
@@ -233,7 +237,10 @@ export default function UserProfileModal({ visible, onClose, currentUser, onUpda
             </View>
 
             {/* Botón Logout */}
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <TouchableOpacity 
+              style={styles.logoutButton} 
+              onPress={handleLogout}
+            >
               <Icon name="log-out-outline" size={24} color="#fff" />
               <Text style={styles.logoutText}>Cerrar Sesión</Text>
             </TouchableOpacity>

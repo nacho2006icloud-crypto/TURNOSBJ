@@ -19,7 +19,12 @@ const DEPORTES_CONFIG = {
 export default function SettingsModal({ visible, onClose, currentUser, onUpdate }) {
   const [activeTab, setActiveTab] = useState('info');
   const [loading, setLoading] = useState(false);
-  const [localInfo, setLocalInfo] = useState({ nombre: '', direccion: '', descripcion: '', precio_hora: '', deportes: '' });
+  const [localInfo, setLocalInfo] = useState({ 
+    nombre: '', 
+    direccion: '', 
+    precio_hora: '', 
+    deportes: [] // Array de deportes seleccionados
+  });
   const [fotos, setFotos] = useState([]);
   const [horarios, setHorarios] = useState([]);
   const [nuevoHorario, setNuevoHorario] = useState({ 
@@ -29,60 +34,178 @@ export default function SettingsModal({ visible, onClose, currentUser, onUpdate 
     max_integrantes: '10',
     disponible: true 
   });
+  const [horaConfig, setHoraConfig] = useState({
+    hora: '9',
+    minutos: '00',
+    periodo: 'AM'
+  });
   const [canchaVisible, setCanchaVisible] = useState(false);
   const diasSemana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
+  // Convertir hora AM/PM a formato 24h
+  const convertirA24h = (hora, minutos, periodo) => {
+    let h = parseInt(hora);
+    if (periodo === 'PM' && h !== 12) h += 12;
+    if (periodo === 'AM' && h === 12) h = 0;
+    return `${h.toString().padStart(2, '0')}:${minutos}`;
+  };
+
+  // Calcular hora de fin según duración del deporte
+  const calcularHoraFin = (horaInicio, duracionMinutos) => {
+    const [h, m] = horaInicio.split(':').map(Number);
+    const totalMinutos = h * 60 + m + duracionMinutos;
+    const horaFin = Math.floor(totalMinutos / 60) % 24;
+    const minFin = totalMinutos % 60;
+    return `${horaFin.toString().padStart(2, '0')}:${minFin.toString().padStart(2, '0')}`;
+  };
+
   useEffect(() => {
     if (visible && currentUser?.local_data) {
+      // Parsear deportes desde JSON
+      let deportesArray = [];
+      if (currentUser.local_data.deportes) {
+        try {
+          deportesArray = typeof currentUser.local_data.deportes === 'string' 
+            ? JSON.parse(currentUser.local_data.deportes) 
+            : currentUser.local_data.deportes;
+          // Asegurar que es un array
+          if (!Array.isArray(deportesArray)) {
+            deportesArray = [];
+          }
+        } catch (e) {
+          console.error('Error parseando deportes:', e);
+          deportesArray = [];
+        }
+      }
+
       setLocalInfo({
         nombre: currentUser.local_data.nombre || '',
         direccion: currentUser.local_data.direccion || '',
-        descripcion: currentUser.local_data.descripcion || '',
         precio_hora: currentUser.local_data.precio_hora?.toString() || '',
-        deportes: currentUser.local_data.deportes || '',
+        deportes: deportesArray,
       });
       const fotosArray = currentUser.local_data.fotos ? (typeof currentUser.local_data.fotos === 'string' ? JSON.parse(currentUser.local_data.fotos) : currentUser.local_data.fotos) : [];
       setFotos(fotosArray);
-      setCanchaVisible(currentUser.local_data.visible === 1 || currentUser.local_data.visible === true);
+      
+      // Solo actualizar visibilidad si el modal se acaba de abrir
+      const visibilidadActual = currentUser.local_data.visible === 1 || currentUser.local_data.visible === true;
+      setCanchaVisible(visibilidadActual);
+      console.log('🔍 Estado de visibilidad cargado:', visibilidadActual);
+      
+      // Establecer el primer deporte disponible como seleccionado en turnos
+      if (deportesArray.length > 0 && !deportesArray.includes(nuevoHorario.deporte)) {
+        const primerDeporte = deportesArray[0];
+        const config = DEPORTES_CONFIG[primerDeporte];
+        setNuevoHorario(prev => ({
+          ...prev,
+          deporte: primerDeporte,
+          max_integrantes: String(config.max_default)
+        }));
+      }
+      
       cargarHorarios();
     }
   }, [visible, currentUser]);
 
   const getToken = async () => {
-    if (Platform.OS === 'web') return localStorage.getItem('authToken');
+    if (Platform.OS === 'web') {
+      const token = localStorage.getItem('auth_token');
+      console.log('🔑 Token desde localStorage:', token ? `SI (${token.substring(0, 20)}...)` : 'NO');
+      if (token) {
+        // Decodificar token para ver su contenido
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          console.log('📋 Token payload:', payload);
+        } catch (e) {
+          console.error('❌ Error decodificando token:', e);
+        }
+      }
+      return token;
+    }
     const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
-    return await AsyncStorage.getItem('authToken');
+    const token = await AsyncStorage.getItem('auth_token');
+    console.log('🔑 Token desde AsyncStorage:', token ? 'SI' : 'NO');
+    return token;
   };
 
   const cargarHorarios = async () => {
     try {
       const token = await getToken();
+      if (!token) {
+        console.error('❌ No hay token disponible');
+        return;
+      }
       const response = await fetch(`${API_BASE_URL}/local/horarios`, { headers: { 'Authorization': `Bearer ${token}` } });
       if (response.ok) {
         const data = await response.json();
-        setHorarios(data.horarios || []);
+        setHorarios(Array.isArray(data) ? data : []);
       }
     } catch (error) {
       console.log('Error cargando horarios:', error);
+      setHorarios([]);
     }
   };
 
   const handleUpdateInfo = async () => {
     try {
+      // Validación: al menos un deporte debe estar seleccionado
+      if (!localInfo.deportes || localInfo.deportes.length === 0) {
+        Alert.alert('Error', 'Debes seleccionar al menos un deporte para tu cancha');
+        return;
+      }
+
+      // Validación: campos obligatorios
+      if (!localInfo.nombre.trim()) {
+        Alert.alert('Error', 'El nombre de la cancha es obligatorio');
+        return;
+      }
+      if (!localInfo.direccion.trim()) {
+        Alert.alert('Error', 'La dirección es obligatoria');
+        return;
+      }
+      if (!localInfo.precio_hora || parseFloat(localInfo.precio_hora) <= 0) {
+        Alert.alert('Error', 'El precio por hora debe ser mayor a 0');
+        return;
+      }
+
       setLoading(true);
       const token = await getToken();
+      
+      if (!token) {
+        Alert.alert('Error', 'No hay sesión activa. Por favor inicia sesión nuevamente.');
+        return;
+      }
+
+      console.log('📤 Enviando actualización de info...');
+      console.log('📦 Datos:', localInfo);
+      
+      // Convertir deportes a JSON para enviar al backend
+      const dataToSend = {
+        ...localInfo,
+        deportes: JSON.stringify(localInfo.deportes)
+      };
+      
       const response = await fetch(`${API_BASE_URL}/local/info`, {
         method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(localInfo),
+        headers: { 
+          'Authorization': `Bearer ${token}`, 
+          'Content-Type': 'application/json' 
+        },
+        body: JSON.stringify(dataToSend),
       });
+      
+      console.log('📡 Respuesta:', response.status);
+      
       if (response.ok) {
         Alert.alert('Éxito', 'Información actualizada correctamente');
         if (onUpdate) onUpdate();
       } else {
-        Alert.alert('Error', 'No se pudo actualizar la información');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ Error response:', errorData);
+        Alert.alert('Error', errorData.error || 'No se pudo actualizar la información');
       }
     } catch (error) {
+      console.error('❌ Error al actualizar:', error);
       Alert.alert('Error', 'Error al actualizar: ' + error.message);
     } finally {
       setLoading(false);
@@ -91,7 +214,11 @@ export default function SettingsModal({ visible, onClose, currentUser, onUpdate 
 
   const handlePickImages = async () => {
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsMultipleSelection: true, quality: 0.8 });
+      const result = await ImagePicker.launchImageLibraryAsync({ 
+        mediaTypes: ImagePicker.MediaType.Images, 
+        allowsMultipleSelection: true, 
+        quality: 0.8 
+      });
       if (!result.canceled && result.assets) subirFotos(result.assets);
     } catch (error) {
       Alert.alert('Error', 'No se pudo seleccionar las imágenes');
@@ -103,17 +230,42 @@ export default function SettingsModal({ visible, onClose, currentUser, onUpdate 
       setLoading(true);
       const token = await getToken();
       const formData = new FormData();
-      assets.forEach((asset, index) => {
-        formData.append('fotos', { uri: asset.uri, type: 'image/jpeg', name: `foto_${Date.now()}_${index}.jpg` });
+      
+      for (let i = 0; i < assets.length; i++) {
+        const asset = assets[i];
+        
+        if (Platform.OS === 'web') {
+          // En web, necesitamos fetch el blob
+          const response = await fetch(asset.uri);
+          const blob = await response.blob();
+          formData.append('fotos', blob, `foto_${Date.now()}_${i}.jpg`);
+        } else {
+          // En móvil, usar el formato estándar
+          formData.append('fotos', {
+            uri: asset.uri,
+            type: 'image/jpeg',
+            name: `foto_${Date.now()}_${i}.jpg`
+          });
+        }
+      }
+      
+      const response = await fetch(`${API_BASE_URL}/local/fotos`, { 
+        method: 'POST', 
+        headers: { 'Authorization': `Bearer ${token}` }, 
+        body: formData 
       });
-      const response = await fetch(`${API_BASE_URL}/local/fotos`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData });
+      
       if (response.ok) {
+        const data = await response.json();
         Alert.alert('Éxito', 'Fotos subidas correctamente');
+        setFotos(data.fotos || []);
         if (onUpdate) onUpdate();
       } else {
-        Alert.alert('Error', 'No se pudieron subir las fotos');
+        const errorData = await response.json();
+        Alert.alert('Error', errorData.error || 'No se pudieron subir las fotos');
       }
     } catch (error) {
+      console.error('Error subiendo fotos:', error);
       Alert.alert('Error', 'Error al subir fotos: ' + error.message);
     } finally {
       setLoading(false);
@@ -131,7 +283,7 @@ export default function SettingsModal({ visible, onClose, currentUser, onUpdate 
             const response = await fetch(`${API_BASE_URL}/local/fotos`, {
               method: 'DELETE',
               headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ fotoUrl }),
+              body: JSON.stringify({ foto: fotoUrl }),
             });
             if (response.ok) {
               Alert.alert('Éxito', 'Foto eliminada');
@@ -153,53 +305,67 @@ export default function SettingsModal({ visible, onClose, currentUser, onUpdate 
       return;
     }
 
-    // Validar hora de inicio
-    if (!nuevoHorario.hora_inicio) {
-      Alert.alert('Error', 'Debes ingresar hora de inicio (formato: HH:MM)');
+    // Validar hora
+    if (!horaConfig.hora || !horaConfig.minutos) {
+      Alert.alert('Error', 'Debes seleccionar la hora de inicio');
       return;
     }
 
-    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
-    if (!timeRegex.test(nuevoHorario.hora_inicio)) {
-      Alert.alert('Error', 'Formato de hora inválido. Usa HH:MM (ejemplo: 09:00)');
-      return;
-    }
-
+    // Convertir AM/PM a formato 24h
+    const hora_inicio = convertirA24h(horaConfig.hora, horaConfig.minutos, horaConfig.periodo);
+    
     // Calcular hora_fin automáticamente según deporte
     const deporteConfig = DEPORTES_CONFIG[nuevoHorario.deporte];
-    const [horas, minutos] = nuevoHorario.hora_inicio.split(':').map(Number);
-    const inicioEnMinutos = horas * 60 + minutos;
-    const finEnMinutos = inicioEnMinutos + deporteConfig.duracion;
-    const horaFin = Math.floor(finEnMinutos / 60);
-    const minutoFin = finEnMinutos % 60;
-    const hora_fin = `${String(horaFin).padStart(2, '0')}:${String(minutoFin).padStart(2, '0')}`;
+    const hora_fin = calcularHoraFin(hora_inicio, deporteConfig.duracion);
 
-    if (horaFin >= 24) {
-      Alert.alert('Error', 'El turno se extiende más allá de las 24:00. Elige una hora de inicio más temprana.');
+    console.log('📅 Creando horarios:', {
+      dias: nuevoHorario.dias,
+      deporte: nuevoHorario.deporte,
+      hora_inicio,
+      hora_fin,
+      max_integrantes: nuevoHorario.max_integrantes
+    });
+
+    // Validar que no pase de medianoche
+    const [horaFin] = hora_fin.split(':').map(Number);
+    const [horaInicio] = hora_inicio.split(':').map(Number);
+    if (horaFin < horaInicio && horaFin !== 0) {
+      Alert.alert('Error', 'El turno se extiende más allá de medianoche. Elige una hora más temprana.');
       return;
     }
 
     try {
       setLoading(true);
       const token = await getToken();
+      console.log('🔑 Token obtenido:', token ? 'SI' : 'NO');
 
       // Crear turno para cada día seleccionado
-      const promesas = nuevoHorario.dias.map(dia =>
-        fetch(`${API_BASE_URL}/local/horarios`, {
+      const promesas = nuevoHorario.dias.map(async dia => {
+        const response = await fetch(`${API_BASE_URL}/local/horarios`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify({
             dia,
             deporte: nuevoHorario.deporte,
-            hora_inicio: nuevoHorario.hora_inicio,
+            hora_inicio,
             hora_fin,
             max_integrantes: parseInt(nuevoHorario.max_integrantes),
             disponible: true
           })
-        })
-      );
+        });
+        
+        const data = await response.json();
+        console.log(`📝 Respuesta para ${dia}:`, response.status, data);
+        
+        if (!response.ok) {
+          throw new Error(data.error || `Error creando turno para ${dia}`);
+        }
+        
+        return data;
+      });
 
-      await Promise.all(promesas);
+      const resultados = await Promise.all(promesas);
+      console.log('✅ Turnos creados:', resultados.length);
       
       Alert.alert('Éxito', `Turnos creados para ${nuevoHorario.dias.length} día(s)`);
       setNuevoHorario({ 
@@ -209,9 +375,11 @@ export default function SettingsModal({ visible, onClose, currentUser, onUpdate 
         max_integrantes: '10',
         disponible: true 
       });
-      cargarHorarios();
+      setHoraConfig({ hora: '9', minutos: '00', periodo: 'AM' });
+      await cargarHorarios();
     } catch (error) {
-      Alert.alert('Error', 'No se pudieron crear los turnos');
+      console.error('❌ Error creando turnos:', error);
+      Alert.alert('Error', 'No se pudieron crear los turnos: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -241,7 +409,7 @@ export default function SettingsModal({ visible, onClose, currentUser, onUpdate 
   const toggleHorario = async (id, disponibleActual) => {
     try {
       const token = await getToken();
-      const response = await fetch(`${API_BASE_URL}/local/horarios/${id}/toggle`, {
+      const response = await fetch(`${API_BASE_URL}/local/horarios/${id}/disponibilidad`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ disponible: !disponibleActual })
@@ -256,45 +424,169 @@ export default function SettingsModal({ visible, onClose, currentUser, onUpdate 
     try {
       const nuevaVisibilidad = !canchaVisible;
       const token = await getToken();
+      
+      if (!token) {
+        Alert.alert('Error', 'No hay sesión activa. Por favor inicia sesión nuevamente.');
+        return;
+      }
+
+      console.log('🔄 Cambiando visibilidad a:', nuevaVisibilidad);
+      
       const response = await fetch(`${API_BASE_URL}/local/visibilidad`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${token}` 
+        },
         body: JSON.stringify({ visible: nuevaVisibilidad })
       });
+      
+      console.log('📡 Respuesta visibilidad:', response.status);
+      
       if (response.ok) {
+        // Actualizar el estado local PRIMERO
         setCanchaVisible(nuevaVisibilidad);
-        Alert.alert('Éxito', nuevaVisibilidad ? 'Tu cancha ahora es visible para todos los usuarios' : 'Tu cancha está oculta. Los usuarios no la verán.');
-        if (onUpdate) onUpdate();
+        
+        // Luego actualizar los datos del usuario
+        if (onUpdate) {
+          await onUpdate();
+        }
+        
+        Alert.alert(
+          'Éxito', 
+          nuevaVisibilidad 
+            ? 'Tu cancha ahora es visible para todos los usuarios' 
+            : 'Tu cancha está oculta. Los usuarios no la verán.'
+        );
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ Error response:', errorData);
+        Alert.alert('Error', errorData.error || 'No se pudo cambiar la visibilidad');
       }
     } catch (error) {
+      console.error('❌ Error:', error);
       Alert.alert('Error', 'No se pudo cambiar la visibilidad');
     }
   };
 
+  const toggleDeporte = (deporte) => {
+    setLocalInfo(prev => ({
+      ...prev,
+      deportes: prev.deportes.includes(deporte)
+        ? prev.deportes.filter(d => d !== deporte)
+        : [...prev.deportes, deporte]
+    }));
+  };
+
   const renderInfoTab = () => (
     <ScrollView style={styles.tabContent}>
-      <Text style={styles.label}>Nombre del Local</Text>
-      <TextInput style={styles.input} value={localInfo.nombre} onChangeText={(text) => setLocalInfo({ ...localInfo, nombre: text })} placeholder="Nombre de tu cancha" />
-      <Text style={styles.label}>Dirección</Text>
-      <TextInput style={styles.input} value={localInfo.direccion} onChangeText={(text) => setLocalInfo({ ...localInfo, direccion: text })} placeholder="Dirección completa" />
-      <Text style={styles.label}>Descripción</Text>
-      <TextInput style={[styles.input, styles.textArea]} value={localInfo.descripcion} onChangeText={(text) => setLocalInfo({ ...localInfo, descripcion: text })} placeholder="Describe tu cancha..." multiline numberOfLines={4} />
-      <Text style={styles.label}>Deportes (separados por coma)</Text>
-      <TextInput style={styles.input} value={localInfo.deportes} onChangeText={(text) => setLocalInfo({ ...localInfo, deportes: text })} placeholder="Ej: Fútbol, Tenis, Básquet" />
-      <Text style={styles.label}>Precio por Hora ($)</Text>
-      <TextInput style={styles.input} value={localInfo.precio_hora} onChangeText={(text) => setLocalInfo({ ...localInfo, precio_hora: text })} placeholder="Precio" keyboardType="numeric" />
-      <TouchableOpacity style={styles.saveButton} onPress={handleUpdateInfo} disabled={loading}>
-        <Text style={styles.saveButtonText}>{loading ? 'Guardando...' : 'Guardar Cambios'}</Text>
+      <Text style={styles.label}>Nombre de la Cancha *</Text>
+      <TextInput 
+        style={styles.input} 
+        value={localInfo.nombre} 
+        onChangeText={(text) => setLocalInfo({ ...localInfo, nombre: text })} 
+        placeholder="Ej: Cancha El Crack" 
+      />
+      
+      <Text style={styles.label}>Dirección/Ubicación *</Text>
+      <TextInput 
+        style={styles.input} 
+        value={localInfo.direccion} 
+        onChangeText={(text) => setLocalInfo({ ...localInfo, direccion: text })} 
+        placeholder="Ej: Av. Corrientes 1234, CABA" 
+      />
+      
+      <Text style={styles.label}>Precio por Hora ($) *</Text>
+      <TextInput 
+        style={styles.input} 
+        value={localInfo.precio_hora} 
+        onChangeText={(text) => setLocalInfo({ ...localInfo, precio_hora: text })} 
+        placeholder="Ej: 5000" 
+        keyboardType="numeric" 
+      />
+      
+      <Text style={styles.label}>Deportes Disponibles * (selecciona al menos uno)</Text>
+      <View style={styles.deportesGrid}>
+        {Object.keys(DEPORTES_CONFIG).map((deporte) => {
+          const isSelected = localInfo.deportes.includes(deporte);
+          const config = DEPORTES_CONFIG[deporte];
+          
+          return (
+            <TouchableOpacity
+              key={deporte}
+              style={[
+                styles.deporteCard,
+                isSelected && { 
+                  backgroundColor: config.color + '20',
+                  borderColor: config.color,
+                  borderWidth: 2
+                }
+              ]}
+              onPress={() => toggleDeporte(deporte)}
+            >
+              <View style={styles.deporteCardContent}>
+                <Icon 
+                  name={isSelected ? "checkbox" : "square-outline"} 
+                  size={24} 
+                  color={isSelected ? config.color : '#999'} 
+                />
+                <Text style={[
+                  styles.deporteCardText,
+                  isSelected && { color: config.color, fontWeight: 'bold' }
+                ]}>
+                  {deporte}
+                </Text>
+              </View>
+              <Text style={styles.deporteCardDuration}>
+                {config.duracion} min · {config.max_default} personas
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      
+      {localInfo.deportes.length === 0 && (
+        <View style={styles.warningBox}>
+          <Icon name="alert-circle" size={20} color="#FF9800" />
+          <Text style={styles.warningText}>
+            Debes seleccionar al menos un deporte para poder guardar
+          </Text>
+        </View>
+      )}
+      
+      <TouchableOpacity 
+        style={[
+          styles.saveButton,
+          localInfo.deportes.length === 0 && styles.saveButtonDisabled
+        ]} 
+        onPress={handleUpdateInfo} 
+        disabled={loading || localInfo.deportes.length === 0}
+      >
+        <Icon name="checkmark-circle" size={20} color="#fff" />
+        <Text style={styles.saveButtonText}>
+          {loading ? 'Guardando...' : 'Guardar Cambios'}
+        </Text>
       </TouchableOpacity>
+      
       <View style={styles.visibilityContainer}>
         <View style={styles.visibilityInfo}>
           <Icon name={canchaVisible ? "eye" : "eye-off"} size={24} color={canchaVisible ? "#4CAF50" : "#999"} />
           <View style={styles.visibilityText}>
-            <Text style={styles.visibilityTitle}>{canchaVisible ? 'Cancha Visible' : 'Cancha Oculta'}</Text>
-            <Text style={styles.visibilitySubtitle}>{canchaVisible ? 'Los usuarios pueden ver tu cancha y reservar turnos' : 'Tu cancha no aparece en búsquedas'}</Text>
+            <Text style={styles.visibilityTitle}>
+              {canchaVisible ? 'Cancha Visible' : 'Cancha Oculta'}
+            </Text>
+            <Text style={styles.visibilitySubtitle}>
+              {canchaVisible 
+                ? 'Los usuarios pueden ver tu cancha y reservar turnos' 
+                : 'Tu cancha no aparece en búsquedas'}
+            </Text>
           </View>
         </View>
-        <Switch value={canchaVisible} onValueChange={toggleVisibilidad} trackColor={{ false: '#ccc', true: '#4CAF50' }} />
+        <Switch 
+          value={canchaVisible} 
+          onValueChange={toggleVisibilidad} 
+          trackColor={{ false: '#ccc', true: '#4CAF50' }} 
+        />
       </View>
     </ScrollView>
   );
@@ -346,16 +638,41 @@ export default function SettingsModal({ visible, onClose, currentUser, onUpdate 
 
   const renderHorariosTab = () => {
     const deporteConfig = DEPORTES_CONFIG[nuevoHorario.deporte];
+    const deportesDisponibles = localInfo.deportes.length > 0 
+      ? localInfo.deportes 
+      : Object.keys(DEPORTES_CONFIG);
+    
+    // Si no hay deportes configurados, mostrar advertencia
+    if (localInfo.deportes.length === 0) {
+      return (
+        <View style={styles.tabContent}>
+          <View style={styles.emptyStateContainer}>
+            <Icon name="alert-circle-outline" size={64} color="#FF9800" />
+            <Text style={styles.emptyStateTitle}>Configura tus deportes primero</Text>
+            <Text style={styles.emptyStateText}>
+              Debes seleccionar los deportes disponibles en tu cancha desde la pestaña "Info" antes de crear turnos.
+            </Text>
+            <TouchableOpacity 
+              style={styles.emptyStateButton}
+              onPress={() => setActiveTab('info')}
+            >
+              <Icon name="settings" size={20} color="#fff" />
+              <Text style={styles.emptyStateButtonText}>Ir a Configuración</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
     
     return (
     <ScrollView style={styles.tabContent}>
       <Text style={styles.sectionTitle}>Crear Nuevos Turnos</Text>
       <View style={styles.horarioForm}>
         
-        {/* Selector de Deporte */}
+        {/* Selector de Deporte - Solo deportes configurados */}
         <Text style={styles.label}>Deporte</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.deportesScroll}>
-          {Object.keys(DEPORTES_CONFIG).map((deporte) => (
+          {deportesDisponibles.map((deporte) => (
             <TouchableOpacity 
               key={deporte}
               style={[
@@ -407,22 +724,87 @@ export default function SettingsModal({ visible, onClose, currentUser, onUpdate 
           ))}
         </View>
 
-        {/* Hora de Inicio (Fin se calcula automáticamente) */}
+        {/* Hora de Inicio con selector AM/PM */}
         <Text style={styles.label}>Hora de Inicio</Text>
-        <TextInput 
-          style={styles.input} 
-          value={nuevoHorario.hora_inicio} 
-          onChangeText={(text) => setNuevoHorario({ ...nuevoHorario, hora_inicio: text })} 
-          placeholder="HH:MM (ej: 09:00)" 
-          keyboardType="numbers-and-punctuation" 
-        />
+        <View style={styles.timePickerContainer}>
+          {/* Selector de Hora (1-12) */}
+          <View style={styles.timePicker}>
+            <Text style={styles.timeLabel}>Hora</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.timeScroll}>
+              {[...Array(12)].map((_, i) => {
+                const hora = (i + 1).toString();
+                return (
+                  <TouchableOpacity
+                    key={hora}
+                    style={[styles.timeOption, horaConfig.hora === hora && styles.timeOptionActive]}
+                    onPress={() => setHoraConfig({ ...horaConfig, hora })}
+                  >
+                    <Text style={[styles.timeOptionText, horaConfig.hora === hora && styles.timeOptionTextActive]}>
+                      {hora}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          {/* Selector de Minutos */}
+          <View style={styles.timePicker}>
+            <Text style={styles.timeLabel}>Min</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.timeScroll}>
+              {['00', '15', '30', '45'].map(min => (
+                <TouchableOpacity
+                  key={min}
+                  style={[styles.timeOption, horaConfig.minutos === min && styles.timeOptionActive]}
+                  onPress={() => setHoraConfig({ ...horaConfig, minutos: min })}
+                >
+                  <Text style={[styles.timeOptionText, horaConfig.minutos === min && styles.timeOptionTextActive]}>
+                    {min}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* Selector AM/PM */}
+          <View style={styles.timePicker}>
+            <Text style={styles.timeLabel}>Período</Text>
+            <View style={styles.periodToggle}>
+              <TouchableOpacity
+                style={[styles.periodButton, horaConfig.periodo === 'AM' && styles.periodButtonActive]}
+                onPress={() => setHoraConfig({ ...horaConfig, periodo: 'AM' })}
+              >
+                <Text style={[styles.periodButtonText, horaConfig.periodo === 'AM' && styles.periodButtonTextActive]}>
+                  AM
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.periodButton, horaConfig.periodo === 'PM' && styles.periodButtonActive]}
+                onPress={() => setHoraConfig({ ...horaConfig, periodo: 'PM' })}
+              >
+                <Text style={[styles.periodButtonText, horaConfig.periodo === 'PM' && styles.periodButtonTextActive]}>
+                  PM
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
         
         {/* Info automática */}
-        {nuevoHorario.hora_inicio && (
+        {horaConfig.hora && horaConfig.minutos && (
           <View style={styles.infoBox}>
             <Icon name="information-circle" size={20} color="#2196F3" />
             <Text style={styles.infoText}>
-              Duración: {deporteConfig.duracion} min • Fin automático calculado
+              Inicia: {horaConfig.hora}:{horaConfig.minutos} {horaConfig.periodo} • 
+              Termina: {(() => {
+                const inicio = convertirA24h(horaConfig.hora, horaConfig.minutos, horaConfig.periodo);
+                const fin = calcularHoraFin(inicio, deporteConfig.duracion);
+                const [h, m] = fin.split(':').map(Number);
+                const periodo = h >= 12 ? 'PM' : 'AM';
+                const hora12 = h === 0 ? 12 : (h > 12 ? h - 12 : h);
+                return `${hora12}:${m.toString().padStart(2, '0')} ${periodo}`;
+              })()} • 
+              Duración: {deporteConfig.duracion} min
             </Text>
           </View>
         )}
@@ -545,8 +927,73 @@ const styles = StyleSheet.create({
   label: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8, marginTop: 12 },
   input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, fontSize: 16, backgroundColor: '#fff' },
   textArea: { height: 100, textAlignVertical: 'top' },
-  saveButton: { backgroundColor: '#0000CD', padding: 16, borderRadius: 8, alignItems: 'center', marginTop: 24 },
+  
+  // Deportes Grid (Info Tab)
+  deportesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 12, marginBottom: 16 },
+  deporteCard: { 
+    width: '48%', 
+    backgroundColor: '#fff', 
+    borderWidth: 1, 
+    borderColor: '#ddd', 
+    borderRadius: 12, 
+    padding: 14, 
+    minHeight: 80,
+    justifyContent: 'space-between'
+  },
+  deporteCardContent: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
+  deporteCardText: { fontSize: 14, color: '#333', fontWeight: '600', flex: 1 },
+  deporteCardDuration: { fontSize: 11, color: '#666', marginTop: 4 },
+  
+  // Warning Box
+  warningBox: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 10, 
+    backgroundColor: '#FFF3E0', 
+    padding: 14, 
+    borderRadius: 8, 
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF9800'
+  },
+  warningText: { fontSize: 13, color: '#F57C00', flex: 1, fontWeight: '500' },
+  
+  // Save Button
+  saveButton: { 
+    flexDirection: 'row',
+    gap: 8,
+    backgroundColor: '#0000CD', 
+    padding: 16, 
+    borderRadius: 8, 
+    alignItems: 'center', 
+    justifyContent: 'center',
+    marginTop: 24 
+  },
+  saveButtonDisabled: { backgroundColor: '#ccc', opacity: 0.6 },
   saveButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  
+  // Empty State (Horarios Tab)
+  emptyStateContainer: { 
+    flex: 1, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    padding: 32,
+    marginTop: 60
+  },
+  emptyStateTitle: { fontSize: 20, fontWeight: 'bold', color: '#333', marginTop: 16, textAlign: 'center' },
+  emptyStateText: { fontSize: 14, color: '#666', marginTop: 12, textAlign: 'center', lineHeight: 20 },
+  emptyStateButton: { 
+    flexDirection: 'row',
+    gap: 8,
+    backgroundColor: '#0000CD', 
+    paddingHorizontal: 24, 
+    paddingVertical: 14, 
+    borderRadius: 8, 
+    marginTop: 24,
+    alignItems: 'center'
+  },
+  emptyStateButtonText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
+  
   visibilityContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f5f5f5', padding: 16, borderRadius: 12, marginTop: 24 },
   visibilityInfo: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 },
   visibilityText: { flex: 1 },
@@ -585,6 +1032,21 @@ const styles = StyleSheet.create({
   infoBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#e3f2fd', padding: 12, borderRadius: 8, marginTop: 8 },
   infoText: { fontSize: 12, color: '#1976d2', flex: 1 },
   
+  // Time Picker styles
+  timePickerContainer: { flexDirection: 'row', gap: 12, marginTop: 8, marginBottom: 12 },
+  timePicker: { flex: 1 },
+  timeLabel: { fontSize: 12, color: '#666', fontWeight: '600', marginBottom: 6 },
+  timeScroll: { maxHeight: 50 },
+  timeOption: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: '#ddd', backgroundColor: '#fff', marginRight: 8, minWidth: 50, alignItems: 'center' },
+  timeOptionActive: { backgroundColor: '#2196F3', borderColor: '#2196F3' },
+  timeOptionText: { fontSize: 14, color: '#333', fontWeight: '500' },
+  timeOptionTextActive: { color: '#fff', fontWeight: 'bold' },
+  periodToggle: { flexDirection: 'row', gap: 8 },
+  periodButton: { flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: '#ddd', backgroundColor: '#fff', alignItems: 'center' },
+  periodButtonActive: { backgroundColor: '#2196F3', borderColor: '#2196F3' },
+  periodButtonText: { fontSize: 14, color: '#333', fontWeight: '500' },
+  periodButtonTextActive: { color: '#fff', fontWeight: 'bold' },
+
   addButton: { flexDirection: 'row', backgroundColor: '#4CAF50', padding: 14, borderRadius: 8, alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16 },
   addButtonText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
   horariosList: { gap: 16 },

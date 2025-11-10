@@ -1,5 +1,6 @@
 // services/authService.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 const API_BASE_URL = 'http://localhost:3000/api';
 
@@ -9,21 +10,29 @@ class AuthService {
     this.user = null;
   }
 
-  // Guardar token en AsyncStorage
+  // Guardar token (compatible con web y móvil)
   async saveToken(token) {
     try {
-      await AsyncStorage.setItem('auth_token', token);
+      if (Platform.OS === 'web') {
+        localStorage.setItem('auth_token', token);
+      } else {
+        await AsyncStorage.setItem('auth_token', token);
+      }
       this.token = token;
     } catch (error) {
       console.error('Error guardando token:', error);
     }
   }
 
-  // Obtener token de AsyncStorage
+  // Obtener token (compatible con web y móvil)
   async getToken() {
     try {
       if (!this.token) {
-        this.token = await AsyncStorage.getItem('auth_token');
+        if (Platform.OS === 'web') {
+          this.token = localStorage.getItem('auth_token');
+        } else {
+          this.token = await AsyncStorage.getItem('auth_token');
+        }
       }
       return this.token;
     } catch (error) {
@@ -32,10 +41,14 @@ class AuthService {
     }
   }
 
-  // Eliminar token
+  // Eliminar token (compatible con web y móvil)
   async removeToken() {
     try {
-      await AsyncStorage.removeItem('auth_token');
+      if (Platform.OS === 'web') {
+        localStorage.removeItem('auth_token');
+      } else {
+        await AsyncStorage.removeItem('auth_token');
+      }
       this.token = null;
       this.user = null;
     } catch (error) {
@@ -197,9 +210,9 @@ class AuthService {
   }
 
   // Obtener usuario actual
-  async getCurrentUser() {
+  async getCurrentUser(forceRefresh = false) {
     try {
-      if (!this.user) {
+      if (!this.user || forceRefresh) {
         const data = await this.authenticatedRequest('/auth/me');
         this.user = data;
       }
@@ -209,6 +222,11 @@ class AuthService {
       await this.removeToken();
       return null;
     }
+  }
+
+  // Refrescar datos del usuario (invalidar caché)
+  async refreshUser() {
+    return await this.getCurrentUser(true);
   }
 
   // Verificar si está autenticado

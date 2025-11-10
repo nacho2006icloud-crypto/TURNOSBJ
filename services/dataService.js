@@ -17,14 +17,14 @@ const turnosData = [
 
 // ========== CANCHAS POR DEPORTE ==========
 const canchasData = {
-  futbol: [
+  'Futbol 5': [
     {
       id: 1,
       nombre: "Predio Futbolístico Norte",
       ubicacion: "Palermo, CABA",
       rating: 4.8,
-      precio: 12000,
-      imagen: "https://via.placeholder.com/400x250/10b981/ffffff?text=Futbol",
+      precio_hora: 12000,
+      imagen: "https://via.placeholder.com/400x250/4CAF50/ffffff?text=Futbol+5",
       caracteristicas: ["Césped sintético", "Iluminación LED", "Vestuarios"],
     },
     {
@@ -32,37 +32,41 @@ const canchasData = {
       nombre: "Club River Plate",
       ubicacion: "Núñez, CABA",
       rating: 4.9,
-      precio: 18000,
-      imagen: "https://via.placeholder.com/400x250/10b981/ffffff?text=Futbol",
+      precio_hora: 18000,
+      imagen: "https://via.placeholder.com/400x250/4CAF50/ffffff?text=Futbol+5",
       caracteristicas: ["Césped natural", "Graderías", "Estacionamiento"],
     },
+  ],
+  'Futbol 7': [
     {
       id: 3,
       nombre: "Canchas Don Bosco",
       ubicacion: "Almagro, CABA",
       rating: 4.5,
-      precio: 10000,
-      imagen: "https://via.placeholder.com/400x250/10b981/ffffff?text=Futbol",
-      caracteristicas: ["Futbol 5", "Parrilla", "Bar"],
+      precio_hora: 15000,
+      imagen: "https://via.placeholder.com/400x250/2196F3/ffffff?text=Futbol+7",
+      caracteristicas: ["Futbol 7", "Parrilla", "Bar"],
     },
+  ],
+  'Futbol 11': [
     {
       id: 4,
       nombre: "Sport Center",
       ubicacion: "Belgrano, CABA",
       rating: 4.7,
-      precio: 14000,
-      imagen: "https://via.placeholder.com/400x250/10b981/ffffff?text=Futbol",
-      caracteristicas: ["Multi-canchas", "Cafetería", "Wi-Fi"],
+      precio_hora: 25000,
+      imagen: "https://via.placeholder.com/400x250/FF9800/ffffff?text=Futbol+11",
+      caracteristicas: ["Campo reglamentario", "Cafetería", "Wi-Fi"],
     },
   ],
-  padel: [
+  'Padel': [
     {
       id: 5,
       nombre: "Padel Pro Center",
       ubicacion: "Recoleta, CABA",
       rating: 4.9,
-      precio: 8000,
-      imagen: "https://via.placeholder.com/400x250/3b82f6/ffffff?text=Padel",
+      precio_hora: 8000,
+      imagen: "https://via.placeholder.com/400x250/9C27B0/ffffff?text=Padel",
       caracteristicas: ["6 canchas", "Iluminación profesional", "Shop"],
     },
     {
@@ -70,37 +74,19 @@ const canchasData = {
       nombre: "Club de Amigos",
       ubicacion: "Palermo, CABA",
       rating: 4.6,
-      precio: 6500,
-      imagen: "https://via.placeholder.com/400x250/3b82f6/ffffff?text=Padel",
+      precio_hora: 6500,
+      imagen: "https://via.placeholder.com/400x250/9C27B0/ffffff?text=Padel",
       caracteristicas: ["4 canchas", "Vestuarios", "Estacionamiento"],
     },
-    {
-      id: 7,
-      nombre: "Padel House",
-      ubicacion: "Núñez, CABA",
-      rating: 4.8,
-      precio: 7500,
-      imagen: "https://via.placeholder.com/400x250/3b82f6/ffffff?text=Padel",
-      caracteristicas: ["Indoor", "Climatizado", "Bar"],
-    },
-    {
-      id: 8,
-      nombre: "Sport Padel Club",
-      ubicacion: "Caballito, CABA",
-      rating: 4.5,
-      precio: 6000,
-      imagen: "https://via.placeholder.com/400x250/3b82f6/ffffff?text=Padel",
-      caracteristicas: ["3 canchas", "Quincho", "Parrilla"],
-    },
   ],
-  tenis: [
+  'Tenis': [
     {
       id: 9,
       nombre: "Buenos Aires Lawn Tennis",
       ubicacion: "Palermo, CABA",
       rating: 4.9,
-      precio: 10000,
-      imagen: "https://via.placeholder.com/400x250/eab308/ffffff?text=Tenis",
+      precio_hora: 10000,
+      imagen: "https://via.placeholder.com/400x250/F44336/ffffff?text=Tenis",
       caracteristicas: ["Polvo de ladrillo", "8 canchas", "Profesores"],
     },
     {
@@ -108,37 +94,19 @@ const canchasData = {
       nombre: "Club Náutico",
       ubicacion: "Puerto Madero, CABA",
       rating: 4.7,
-      precio: 12000,
-      imagen: "https://via.placeholder.com/400x250/eab308/ffffff?text=Tenis",
+      precio_hora: 12000,
+      imagen: "https://via.placeholder.com/400x250/F44336/ffffff?text=Tenis",
       caracteristicas: ["Hard court", "Vista al río", "Restaurant"],
     },
-    {
-      id: 11,
-      nombre: "Tenis Center",
-      ubicacion: "Villa Urquiza, CABA",
-      rating: 4.6,
-      precio: 8500,
-      imagen: "https://via.placeholder.com/400x250/eab308/ffffff?text=Tenis",
-      caracteristicas: ["Césped sintético", "Iluminación", "Buffet"],
-    },
-    {
-      id: 12,
-      nombre: "Club Italiano",
-      ubicacion: "Almagro, CABA",
-      rating: 4.8,
-      precio: 9500,
-      imagen: "https://via.placeholder.com/400x250/eab308/ffffff?text=Tenis",
-      caracteristicas: ["Canchas rápidas", "Vestuarios", "Sauna"],
-    },
   ],
-  basket: [
+  'Basquet': [
     {
       id: 13,
       nombre: "Basketball Arena",
       ubicacion: "Belgrano, CABA",
       rating: 4.8,
-      precio: 11000,
-      imagen: "https://via.placeholder.com/400x250/f97316/ffffff?text=Basket",
+      precio_hora: 11000,
+      imagen: "https://via.placeholder.com/400x250/FF5722/ffffff?text=Basquet",
       caracteristicas: ["Indoor", "Tablero NBA", "Graderías"],
     },
     {
@@ -146,65 +114,20 @@ const canchasData = {
       nombre: "Club Obras",
       ubicacion: "Núñez, CABA",
       rating: 4.9,
-      precio: 13000,
-      imagen: "https://via.placeholder.com/400x250/f97316/ffffff?text=Basket",
+      precio_hora: 13000,
+      imagen: "https://via.placeholder.com/400x250/FF5722/ffffff?text=Basquet",
       caracteristicas: ["Profesional", "Aire acondicionado", "Vestuarios"],
     },
-    {
-      id: 15,
-      nombre: "Sport Complex",
-      ubicacion: "Villa Crespo, CABA",
-      rating: 4.5,
-      precio: 9000,
-      imagen: "https://via.placeholder.com/400x250/f97316/ffffff?text=Basket",
-      caracteristicas: ["2 canchas", "Estacionamiento", "Buffet"],
-    },
-    {
-      id: 16,
-      nombre: "Basket Pro",
-      ubicacion: "Palermo, CABA",
-      rating: 4.7,
-      precio: 10500,
-      imagen: "https://via.placeholder.com/400x250/f97316/ffffff?text=Basket",
-      caracteristicas: ["Piso de parquet", "Iluminación LED", "Wi-Fi"],
-    },
   ],
-  handball: [
+  'Voley': [
     {
       id: 17,
-      nombre: "Handball Center",
+      nombre: "Voley Center",
       ubicacion: "Caballito, CABA",
       rating: 4.6,
-      precio: 9500,
-      imagen: "https://via.placeholder.com/400x250/ef4444/ffffff?text=Handball",
+      precio_hora: 9500,
+      imagen: "https://via.placeholder.com/400x250/00BCD4/ffffff?text=Voley",
       caracteristicas: ["Indoor", "Piso reglamentario", "Vestuarios"],
-    },
-    {
-      id: 18,
-      nombre: "Club Ferro",
-      ubicacion: "Caballito, CABA",
-      rating: 4.8,
-      precio: 11500,
-      imagen: "https://via.placeholder.com/400x250/ef4444/ffffff?text=Handball",
-      caracteristicas: ["Profesional", "Graderías", "Buffet"],
-    },
-    {
-      id: 19,
-      nombre: "Sport Handball",
-      ubicacion: "Flores, CABA",
-      rating: 4.4,
-      precio: 8000,
-      imagen: "https://via.placeholder.com/400x250/ef4444/ffffff?text=Handball",
-      caracteristicas: ["2 canchas", "Estacionamiento", "Parrilla"],
-    },
-    {
-      id: 20,
-      nombre: "Handball Pro Club",
-      ubicacion: "Villa Devoto, CABA",
-      rating: 4.7,
-      precio: 10000,
-      imagen: "https://via.placeholder.com/400x250/ef4444/ffffff?text=Handball",
-      caracteristicas: ["Climatizado", "Bar", "Wi-Fi"],
     },
   ],
 };
@@ -344,23 +267,87 @@ export const turnosService = {
 };
 
 export const canchasService = {
-  // Obtener canchas por deporte
+  // Obtener canchas por deporte (desde API real)
   getCanchasPorDeporte: async (deporte) => {
-    await delay(300);
-    return canchasData[deporte.toLowerCase()] || [];
+    try {
+      // Si es 'favoritas', retornar array vacío por ahora (implementar después)
+      if (deporte === 'favoritas') {
+        return [];
+      }
+
+      const API_BASE_URL = 'http://localhost:3000/api';
+      const url = `${API_BASE_URL}/canchas?deporte=${encodeURIComponent(deporte)}`;
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        console.error('Error obteniendo canchas:', response.status);
+        // Fallback a mock data si hay error
+        return canchasData[deporte] || [];
+      }
+
+      const canchas = await response.json();
+      return canchas;
+    } catch (error) {
+      console.error('Error en getCanchasPorDeporte:', error);
+      // Fallback a mock data si hay error
+      return canchasData[deporte] || [];
+    }
   },
 
   // Obtener todas las canchas
   getTodasCanchas: async () => {
-    await delay(400);
-    return Object.values(canchasData).flat();
+    try {
+      const API_BASE_URL = 'http://localhost:3000/api';
+      const response = await fetch(`${API_BASE_URL}/canchas`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        console.error('Error obteniendo canchas:', response.status);
+        return Object.values(canchasData).flat();
+      }
+
+      const canchas = await response.json();
+      return canchas;
+    } catch (error) {
+      console.error('Error en getTodasCanchas:', error);
+      return Object.values(canchasData).flat();
+    }
   },
 
   // Obtener cancha por ID
   getCanchaById: async (id) => {
-    await delay(200);
-    const todasCanchas = Object.values(canchasData).flat();
-    return todasCanchas.find(c => c.id === id);
+    try {
+      const API_BASE_URL = 'http://localhost:3000/api';
+      const response = await fetch(`${API_BASE_URL}/canchas/${id}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        console.error('Error obteniendo cancha:', response.status);
+        const todasCanchas = Object.values(canchasData).flat();
+        return todasCanchas.find(c => c.id === id);
+      }
+
+      const cancha = await response.json();
+      return cancha;
+    } catch (error) {
+      console.error('Error en getCanchaById:', error);
+      const todasCanchas = Object.values(canchasData).flat();
+      return todasCanchas.find(c => c.id === id);
+    }
   },
 };
 
@@ -397,29 +384,39 @@ export const goatsService = {
 
 // Iconos/Colores por deporte
 export const deportesConfig = {
-  futbol: { 
+  'Futbol 5': { 
     icon: 'football', 
-    color: '#10b981',
-    gradientColors: ['#059669', '#10b981']
+    color: '#4CAF50',
+    gradientColors: ['#388E3C', '#4CAF50']
   },
-  padel: { 
+  'Futbol 7': { 
+    icon: 'football', 
+    color: '#2196F3',
+    gradientColors: ['#1976D2', '#2196F3']
+  },
+  'Futbol 11': { 
+    icon: 'football', 
+    color: '#FF9800',
+    gradientColors: ['#F57C00', '#FF9800']
+  },
+  'Padel': { 
     icon: 'tennisball', 
-    color: '#3b82f6',
-    gradientColors: ['#2563eb', '#3b82f6']
+    color: '#9C27B0',
+    gradientColors: ['#7B1FA2', '#9C27B0']
   },
-  tenis: { 
+  'Tenis': { 
     icon: 'tennisball', 
-    color: '#eab308',
-    gradientColors: ['#ca8a04', '#eab308']
+    color: '#F44336',
+    gradientColors: ['#D32F2F', '#F44336']
   },
-  basket: { 
+  'Basquet': { 
     icon: 'basketball', 
-    color: '#f97316',
-    gradientColors: ['#ea580c', '#f97316']
+    color: '#FF5722',
+    gradientColors: ['#E64A19', '#FF5722']
   },
-  handball: { 
+  'Voley': { 
     icon: 'baseball', 
-    color: '#ef4444',
-    gradientColors: ['#dc2626', '#ef4444']
+    color: '#00BCD4',
+    gradientColors: ['#0097A7', '#00BCD4']
   },
 };

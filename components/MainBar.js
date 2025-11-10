@@ -14,8 +14,10 @@ export default function MainBar({
   onPressPlus = () => {},
   onPressUser = () => {},
   onPressSettings = () => {},
+  currentUser = null,
 }) {
   const insets = useSafeAreaInsets();
+  const isLocal = currentUser?.tipo_usuario === 'local';
 
   return (
     <View
@@ -33,14 +35,16 @@ export default function MainBar({
           <View style={styles.glassOverlay} />
           
           <View style={styles.contentRow}>
-            {/* Configuración (izquierda) */}
-            <TouchableOpacity
-              style={styles.iconButton}
-              onPress={onPressSettings}
-              activeOpacity={0.6}
-            >
-              <Icon name="settings" size={24} color="#1f2937" />
-            </TouchableOpacity>
+            {/* Configuración (izquierda) - SOLO VISIBLE PARA CANCHAS */}
+            {isLocal && (
+              <TouchableOpacity
+                style={styles.iconButton}
+                onPress={onPressSettings}
+                activeOpacity={0.6}
+              >
+                <Icon name="settings" size={24} color="#1f2937" />
+              </TouchableOpacity>
+            )}
 
             {/* Botón central destacado con gradiente */}
             <TouchableOpacity

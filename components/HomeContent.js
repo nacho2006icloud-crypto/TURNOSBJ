@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   FlatList,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -75,50 +76,17 @@ export default function HomeContent() {
   const cargarCanchas = async () => {
     try {
       if (deporteSeleccionado === 'favoritas') {
-        // Cargar canchas favoritas (mock data por ahora)
+        // Cargar canchas favoritas (implementar después)
         setCanchas([]);
       } else {
+        console.log('🔍 Cargando canchas para:', deporteSeleccionado);
         const canchasData = await canchasService.getCanchasPorDeporte(deporteSeleccionado);
-        setCanchas(canchasData);
+        console.log('✅ Canchas cargadas:', canchasData ? canchasData.length : 0);
+        setCanchas(Array.isArray(canchasData) ? canchasData : []);
       }
     } catch (error) {
-      console.error('Error cargando canchas:', error);
-      // Mock data para testing
-      const mockCanchas = [
-        {
-          id: 1,
-          nombre: `Cancha ${deporteSeleccionado} 1`,
-          precio_hora: 5000,
-          rating: 4.5,
-          fotos: [],
-          ubicacion: 'Centro'
-        },
-        {
-          id: 2,
-          nombre: `Cancha ${deporteSeleccionado} 2`,
-          precio_hora: 7500,
-          rating: 4.8,
-          fotos: [],
-          ubicacion: 'Norte'
-        },
-        {
-          id: 3,
-          nombre: `Cancha ${deporteSeleccionado} 3`,
-          precio_hora: 6000,
-          rating: 4.2,
-          fotos: [],
-          ubicacion: 'Sur'
-        },
-        {
-          id: 4,
-          nombre: `Cancha ${deporteSeleccionado} 4`,
-          precio_hora: 8000,
-          rating: 4.7,
-          fotos: [],
-          ubicacion: 'Oeste'
-        }
-      ];
-      setCanchas(mockCanchas);
+      console.error('❌ Error cargando canchas:', error);
+      setCanchas([]);
     }
   };
 
@@ -147,6 +115,15 @@ export default function HomeContent() {
       ]}
       showsVerticalScrollIndicator={false}
       scrollEventThrottle={16}
+      refreshControl={
+        <RefreshControl
+          refreshing={loading}
+          onRefresh={cargarDatos}
+          tintColor="rgba(255,255,255,0.8)"
+          colors={['#0000CD', '#3b82f6']}
+          progressViewOffset={80 + insets.top}
+        />
+      }
     >
       {/* Sección 1: Tus Turnos */}
       <View style={[styles.section, { height: sectionHeight }]}>
@@ -218,12 +195,12 @@ export default function HomeContent() {
       {/* Espaciador */}
       <View style={styles.sectionSpacer} />
 
-      {/* Sección 2: Clasificación de Canchas */}
+      {/* Sección 2: Canchas */}
       <View style={[styles.section, { height: sectionHeight }]}>
         <View style={styles.transparentBg}>
           <View style={styles.sectionContent}>
-            <Ionicons name="trophy" size={48} color="rgba(255,255,255,0.9)" />
-            <Text style={styles.sectionTitle}>Clasificación de Canchas</Text>
+            <Ionicons name="football" size={48} color="rgba(255,255,255,0.9)" />
+            <Text style={styles.sectionTitle}>Canchas</Text>
             
             {/* Contenedor de selectores */}
             <View style={styles.selectoresContainer}>
@@ -300,6 +277,13 @@ export default function HomeContent() {
                 style={styles.canchasList}
                 renderItem={({ item }) => {
                   const cardWidth = (dimensions.width - 60) / 2; // Responsive width
+                  const deporteIcon = deporteSeleccionado === 'favoritas' 
+                    ? 'heart' 
+                    : (deportesConfig[deporteSeleccionado]?.icon || 'football');
+                  const deporteColor = deporteSeleccionado === 'favoritas' 
+                    ? '#ff6b9d' 
+                    : (deportesConfig[deporteSeleccionado]?.color || '#0000CD');
+                  
                   return (
                     <TouchableOpacity 
                       style={[styles.canchaCard, { width: cardWidth, height: cardWidth }]}
@@ -318,9 +302,9 @@ export default function HomeContent() {
                         ) : (
                           <View style={styles.canchaImagePlaceholder}>
                             <Ionicons 
-                              name={deporteSeleccionado === 'favoritas' ? 'heart' : deportesConfig[deporteSeleccionado]?.icon || 'football'} 
+                              name={deporteIcon} 
                               size={32} 
-                              color={deporteSeleccionado === 'favoritas' ? '#ff6b9d' : deportesConfig[deporteSeleccionado]?.color || '#0000CD'} 
+                              color={deporteColor} 
                             />
                           </View>
                         )}
@@ -332,7 +316,9 @@ export default function HomeContent() {
 
                         {/* Precio overlay */}
                         <View style={styles.priceOverlay}>
-                          <Text style={styles.priceText}>${item.precio_hora || 0}/h</Text>
+                          <Text style={styles.priceText}>
+                            ${parseFloat(item.precio_hora) || 0}/h
+                          </Text>
                         </View>
                       </View>
 
@@ -343,7 +329,9 @@ export default function HomeContent() {
                         <View style={styles.canchaMetaRow}>
                           <View style={styles.canchaRatingRow}>
                             <Ionicons name="star" size={12} color="#fbbf24" />
-                            <Text style={styles.canchaRating}>{(item.rating || 0).toFixed(1)}</Text>
+                            <Text style={styles.canchaRating}>
+                              {(parseFloat(item.rating) || 0).toFixed(1)}
+                            </Text>
                           </View>
                           <Text style={styles.canchaDistance}>2.1km</Text>
                         </View>
